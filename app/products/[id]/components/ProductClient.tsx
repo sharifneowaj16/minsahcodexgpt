@@ -13,7 +13,7 @@ import {
   Smartphone,
   Truck,
 } from 'lucide-react';
-import AddToCartStepper from '@/components/cart/AddToCartStepper';
+import CartStepper from '@/components/cart/CartStepper';
 import ProductGallery from './ProductGallery';
 import { GiftRequestButton, ShareButton } from './GiftShareButtons';
 import ProductStickyHeader from './ProductStickyHeader';
@@ -228,9 +228,8 @@ export default function ProductClient({
     ? [variantSize, variantColor].filter(Boolean).join(' / ') || selectedVariantObj.name
     : null;
 
-  const hasVariants = product.variants.length > 0;
-  const requiresVariantSelection = product.variants.length > 1 && !selectedVariantObj;
-  const activeStock = selectedVariantObj ? selectedVariantObj.stock : hasVariants ? 0 : product.stock;
+  const requiresVariantSelection = product.variants.length > 0 && !selectedVariantObj;
+  const activeStock = selectedVariantObj ? selectedVariantObj.stock : requiresVariantSelection ? 0 : product.stock;
   const activeInStock = !requiresVariantSelection && activeStock > 0;
   const discountPct =
     product.originalPrice && product.originalPrice > currentPrice
@@ -370,7 +369,7 @@ export default function ProductClient({
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="text-sm font-semibold text-amber-800">ভ্যারিয়েন্ট সিলেক্ট করুন</p>
                 <p className="mt-1 text-xs text-amber-700">
-                  সাইজ বা শেড সিলেক্ট করলে available stock আর add-to-cart action active হবে।
+                  Add to cart করার আগে সাইজ বা শেড বেছে নিতে হবে।
                 </p>
               </div>
             ) : (
@@ -568,25 +567,16 @@ export default function ProductClient({
                         </div>
                         </Link>
                         <div className="px-2.5 pb-2.5">
-                          {relatedProduct.hasVariants ? (
-                            <Link
-                              href={`/products/${relatedProduct.slug}`}
-                              className="flex h-11 w-full items-center justify-center rounded-2xl bg-[#3D1F0E] px-5 py-3 text-sm font-semibold text-[#F5E6D3] transition-colors hover:bg-[#2A1509]"
-                            >
-                              Select Options
-                            </Link>
-                          ) : (
-                            <AddToCartStepper
-                              productId={relatedProduct.id}
-                              productName={relatedProduct.name}
-                              productImage={relatedProduct.image}
-                              price={relatedProduct.price}
-                              maxStock={relatedProduct.stock}
-                              className="w-full"
-                              disabled={relatedProduct.stock === 0}
-                              disabledLabel="Out of Stock"
-                            />
-                          )}
+                          <CartStepper
+                            productId={relatedProduct.id}
+                            productName={relatedProduct.name}
+                            productImage={relatedProduct.image}
+                            price={relatedProduct.price}
+                            maxStock={relatedProduct.stock}
+                            hasRequiredVariants={relatedProduct.hasVariants}
+                            className="w-full"
+                            disabled={relatedProduct.stock === 0}
+                          />
                         </div>
                       </div>
                     );
@@ -654,25 +644,16 @@ export default function ProductClient({
                           </div>
                         </Link>
                         <div className="px-2.5 pb-2.5">
-                          {bundleProduct.hasVariants ? (
-                            <Link
-                              href={`/products/${bundleProduct.slug}`}
-                              className="flex h-11 w-full items-center justify-center rounded-2xl bg-[#3D1F0E] px-5 py-3 text-sm font-semibold text-[#F5E6D3] transition-colors hover:bg-[#2A1509]"
-                            >
-                              Select Options
-                            </Link>
-                          ) : (
-                            <AddToCartStepper
-                              productId={bundleProduct.id}
-                              productName={bundleProduct.name}
-                              productImage={bundleProduct.image}
-                              price={bundleProduct.price}
-                              maxStock={bundleProduct.stock}
-                              className="w-full"
-                              disabled={bundleProduct.stock === 0}
-                              disabledLabel="Out of Stock"
-                            />
-                          )}
+                          <CartStepper
+                            productId={bundleProduct.id}
+                            productName={bundleProduct.name}
+                            productImage={bundleProduct.image}
+                            price={bundleProduct.price}
+                            maxStock={bundleProduct.stock}
+                            hasRequiredVariants={bundleProduct.hasVariants}
+                            className="w-full"
+                            disabled={bundleProduct.stock === 0}
+                          />
                         </div>
                       </div>
                     );
@@ -730,25 +711,16 @@ export default function ProductClient({
                           </div>
                         </Link>
                         <div className="px-2.5 pb-2.5">
-                          {recentProduct.hasVariants ? (
-                            <Link
-                              href={`/products/${recentProduct.slug}`}
-                              className="flex h-11 w-full items-center justify-center rounded-2xl bg-[#3D1F0E] px-5 py-3 text-sm font-semibold text-[#F5E6D3] transition-colors hover:bg-[#2A1509]"
-                            >
-                              Select Options
-                            </Link>
-                          ) : (
-                            <AddToCartStepper
-                              productId={recentProduct.id}
-                              productName={recentProduct.name}
-                              productImage={recentProduct.image}
-                              price={recentProduct.price}
-                              maxStock={recentProduct.stock}
-                              className="w-full"
-                              disabled={recentProduct.stock === 0}
-                              disabledLabel="Out of Stock"
-                            />
-                          )}
+                          <CartStepper
+                            productId={recentProduct.id}
+                            productName={recentProduct.name}
+                            productImage={recentProduct.image}
+                            price={recentProduct.price}
+                            maxStock={recentProduct.stock}
+                            hasRequiredVariants={recentProduct.hasVariants}
+                            className="w-full"
+                            disabled={recentProduct.stock === 0}
+                          />
                         </div>
                       </div>
                     );

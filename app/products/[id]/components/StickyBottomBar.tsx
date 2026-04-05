@@ -102,10 +102,9 @@ export default function StickyBottomBar({
               size={size}
               color={color}
               variantImage={variantImage}
-              initialQuantity={quantity}
+              hasRequiredVariants={requiresVariantSelection}
               className="flex-1"
               disabled={isDisabled}
-              disabledLabel={requiresVariantSelection ? 'Select Option' : 'Out of Stock'}
             />
 
             <button
@@ -120,7 +119,7 @@ export default function StickyBottomBar({
               }`}
             >
               <ShoppingBag size={15} />
-              {requiresVariantSelection ? 'Select Option' : 'Buy Now'}
+              {requiresVariantSelection ? 'Select Variant' : 'Buy Now'}
             </button>
           </div>
         </div>

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { Product } from '@/types/product';
 import { formatPrice } from '@/lib/shopUtils';
-import AddToCartStepper from '@/components/cart/AddToCartStepper';
+import CartStepper from '@/components/cart/CartStepper';
 
 interface ProductCardProps {
   product: Product;
@@ -133,25 +133,24 @@ export default function ProductCard({ product, onQuickView }: ProductCardProps) 
         </div>
 
         <div className="flex gap-2">
-          {product.hasVariants ? (
-            <Link
-              href={`/products/${product.id}`}
-              className="flex-1 flex items-center justify-center px-5 py-3 rounded-2xl bg-[#3D1F0E] text-[#F5E6D3] text-sm font-semibold transition-colors hover:bg-[#2A1509]"
-            >
-              Select Options
-            </Link>
-          ) : (
-            <AddToCartStepper
-              productId={product.id}
-              productName={product.name}
-              productImage={product.image}
-              price={product.price}
-              maxStock={product.stock}
-              className="w-full flex-1"
-              disabled={product.stock === 0}
-              disabledLabel="Out of Stock"
-            />
-          )}
+          <CartStepper
+            productId={product.id}
+            productName={product.name}
+            productImage={product.image}
+            price={product.price}
+            maxStock={product.stock}
+            hasRequiredVariants={product.hasVariants}
+            variants={product.variants?.map((variant) => ({
+              id: variant.id,
+              name: variant.name,
+              price: variant.price,
+              stock: variant.stock,
+              image: variant.image ?? null,
+              attributes: variant.option && variant.value ? { [variant.option.toLowerCase()]: variant.value } : {},
+            }))}
+            className="w-full flex-1"
+            disabled={product.stock === 0}
+          />
         </div>
 
         {onQuickView && (

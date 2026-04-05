@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Heart, ShoppingCart, Home as HomeIcon, User, ChevronRight, Flame } from 'lucide-react';
 import { formatPrice, convertUSDtoBDT } from '@/utils/currency';
-import AddToCartStepper from '@/components/cart/AddToCartStepper';
+import CartStepper from '@/components/cart/CartStepper';
 
 // Helper: render a real image URL or fall back to emoji text
 function ProductImage({ src, alt }: { src: string; alt: string }) {
@@ -226,27 +226,16 @@ export default function HomePage() {
   );
 
   const renderHomeCartAction = (product: HomeProductCardItem, className: string) => {
-    if (product.hasVariants) {
-      return (
-        <Link
-          href={`/products/${product.id}`}
-          className={`flex items-center justify-center rounded-2xl bg-[#3D1F0E] px-5 py-3 text-sm font-semibold text-[#F5E6D3] transition-colors hover:bg-[#2A1509] ${className}`}
-        >
-          Select Options
-        </Link>
-      );
-    }
-
     return (
-      <AddToCartStepper
+      <CartStepper
         productId={product.id}
         productName={product.name}
         productImage={product.image}
         price={product.price}
         maxStock={product.stock}
+        hasRequiredVariants={product.hasVariants}
         className={className}
         disabled={product.stock === 0}
-        disabledLabel="Out of Stock"
       />
     );
   };
