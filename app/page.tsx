@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Heart, ShoppingCart, Home as HomeIcon, User, ChevronRight, Flame } from 'lucide-react';
-import { formatPrice, convertUSDtoBDT } from '@/utils/currency';
+import { formatPrice } from '@/utils/currency';
 import CartStepper from '@/components/cart/CartStepper';
 
 // Helper: render a real image URL or fall back to emoji text
@@ -509,10 +509,10 @@ export default function HomePage() {
                 <h3 className="text-xs font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm font-bold text-minsah-primary">
-                    {formatPrice(convertUSDtoBDT(product.price))}
+                    {formatPrice(product.price)}
                   </span>
                   <span className="text-xs text-minsah-secondary line-through">
-                    {formatPrice(convertUSDtoBDT(product.originalPrice))}
+                    {formatPrice(product.originalPrice)}
                   </span>
                 </div>
               </Link>
@@ -546,7 +546,7 @@ export default function HomePage() {
                 <h3 className="text-xs font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <p className="text-xs text-minsah-secondary mb-1">{product.sku}</p>
                 <span className="text-sm font-bold text-minsah-primary mb-2 block">
-                  {formatPrice(convertUSDtoBDT(product.price))}
+                  {formatPrice(product.price)}
                 </span>
               </Link>
               {renderHomeCartAction(product, 'w-full')}
@@ -578,7 +578,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-xs font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <span className="text-sm font-bold text-minsah-primary block mb-2">
-                  {formatPrice(convertUSDtoBDT(product.price))}
+                  {formatPrice(product.price)}
                 </span>
               </Link>
               {renderHomeCartAction(product, 'w-full')}
@@ -611,7 +611,7 @@ export default function HomePage() {
                 <h3 className="text-[10px] font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <div className="flex items-center gap-1 mb-1">
                   <span className="text-xs font-bold text-minsah-primary">
-                    {formatPrice(convertUSDtoBDT(product.price))}
+                    {formatPrice(product.price)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 mb-2">
@@ -650,7 +650,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="text-[10px] font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <span className="text-xs font-bold text-minsah-primary block mb-2">
-                  {formatPrice(convertUSDtoBDT(product.price))}
+                  {formatPrice(product.price)}
                 </span>
               </Link>
               {renderHomeCartAction(product, 'w-full')}

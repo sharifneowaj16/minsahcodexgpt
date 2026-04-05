@@ -753,7 +753,7 @@ export default function ProductClient({
           stock: variant.stock,
           image: variant.image ?? null,
           weight: variant.weight ?? product.weight ?? null,
-          attributes: variant.attributes ?? {},
+          attributes: (variant.attributes ?? {}) as Record<string, string>,
         }))}
         quantity={quantity}
         maxStock={activeStock}

@@ -198,7 +198,7 @@ export default function BuyNowModal({
           stock: variant.stock,
           image: variant.image ?? null,
           weight: variant.weight ?? data.product.weight,
-          attributes: variant.attributes ?? {},
+          attributes: (variant.attributes ?? {}) as Record<string, string>,
         }));
         setResolvedVariants(fetchedVariants);
         if (fetchedVariants.length) {

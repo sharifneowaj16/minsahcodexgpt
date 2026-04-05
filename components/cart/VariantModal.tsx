@@ -67,7 +67,7 @@ function normalizeVariants(variants: VariantModalProps['variants']): VariantOpti
     stock: variant.stock,
     sku: variant.sku,
     image: variant.image ?? null,
-    attributes: variant.attributes ?? {},
+    attributes: (variant.attributes ?? {}) as Record<string, string>,
   }));
 }
 
@@ -153,7 +153,7 @@ export default function VariantModal({
             stock: variant.stock,
             sku: variant.sku,
             image: variant.image ?? null,
-            attributes: variant.attributes ?? {},
+            attributes: (variant.attributes ?? {}) as Record<string, string>,
           }))
         );
       } catch (fetchError) {
@@ -564,7 +564,7 @@ export default function VariantModal({
           <div className="border-t border-stone-200 px-5 py-4">
             <button
               type="button"
-              onClick={handleConfirm}
+              onClick={() => void handleConfirm()}
               disabled={!canConfirm}
               className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                 canConfirm
