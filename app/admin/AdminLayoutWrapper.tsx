@@ -70,6 +70,7 @@ const menuItems: MenuItem[] = [
       { title: 'All Products', href: '/admin/products' },
       { title: 'Categories', href: '/admin/categories', permission: PERMISSIONS.CONTENT_MANAGE },
       { title: 'Inventory', href: '/admin/inventory' },
+      { title: 'Inventory Shortlist', href: '/admin/inventory?tab=shortlist' },
     ],
   },
   {

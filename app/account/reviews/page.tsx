@@ -1,20 +1,104 @@
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/nextauth';
+import prisma from '@/lib/prisma';
 import { ReviewsClient } from '@/components/account/reviews-client';
-import { Sparkles, Brush } from 'lucide-react';
-import type { ProductReview } from '@/types/user';
 
-const mockReviews: ProductReview[] = [
-  { id: '1', productId: 'prod-001', productName: 'Premium Face Serum', productImage: '/images/products/face-serum.jpg', rating: 5, title: 'Amazing Product!', content: 'This face serum has completely transformed my skin. It feels so smooth and hydrated after just a week of use. The packaging is also beautiful and the scent is lovely. Highly recommend!', isVerified: true, helpfulCount: 24, createdAt: new Date('2024-01-15'), updatedAt: new Date('2024-01-15') },
-  { id: '2', productId: 'prod-002', productName: 'Luxury Lipstick Set', productImage: '/images/products/lipstick-set.jpg', rating: 4, title: 'Great colors, long lasting', content: 'The colors in this set are beautiful and very pigmented. They last for hours without needing to reapply. My only complaint is that the formula is a bit drying, so make sure to use lip balm underneath.', isVerified: true, helpfulCount: 18, createdAt: new Date('2024-01-10'), updatedAt: new Date('2024-01-10') },
-  { id: '3', productId: 'prod-003', productName: 'Organic Face Cream', productImage: '/images/products/face-cream.jpg', rating: 3, title: 'Good but not amazing', content: "This is a decent face cream. It's lightweight and absorbs quickly, but I didn't see any dramatic improvements in my skin. The price point is good for the quality though.", isVerified: true, helpfulCount: 7, createdAt: new Date('2023-12-28'), updatedAt: new Date('2023-12-28') },
-  { id: '4', productId: 'prod-004', productName: 'Eye Shadow Palette', productImage: '/images/products/eyeshadow-palette.jpg', rating: 5, title: 'Beautiful pigmentation!', content: 'The pigmentation in these eyeshadows is incredible! They blend so easily and last all day without creasing. The color selection is perfect for both day and night looks. Will definitely repurchase.', isVerified: true, helpfulCount: 32, createdAt: new Date('2023-12-15'), updatedAt: new Date('2023-12-15') },
-  { id: '5', productId: 'prod-005', productName: 'Mascara Deluxe', productImage: '/images/products/mascara.jpg', rating: 4, title: 'Great volume and length', content: "This mascara gives great volume and length to my lashes. I love the brush design - it separates the lashes perfectly. It can smudge a bit if you have watery eyes, but overall it's a great product.", isVerified: true, helpfulCount: 15, createdAt: new Date('2023-12-01'), updatedAt: new Date('2023-12-01') }
-];
+async function getReviewsData(userId: string) {
+  const reviews = await prisma.review.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          images: {
+            take: 1,
+            orderBy: { sortOrder: 'asc' },
+            select: { url: true },
+          },
+        },
+      },
+    },
+  });
 
-const mockReviewableProducts = [
-  { id: 'prod-006', name: 'Blush Brush Set', image: <Brush className="w-8 h-8 text-orange-400" />, orderDate: new Date('2024-01-20'), canReview: true },
-  { id: 'prod-007', name: 'Nail Polish Collection', image: <Sparkles className="w-8 h-8 text-red-400" />, orderDate: new Date('2024-01-18'), canReview: true }
-];
+  const reviewedProductIds = new Set(reviews.map((review) => review.productId));
+
+  const deliveredOrderItems = await prisma.orderItem.findMany({
+    where: {
+      order: {
+        userId,
+        status: 'DELIVERED',
+      },
+    },
+    orderBy: { order: { createdAt: 'desc' } },
+    include: {
+      order: {
+        select: { createdAt: true },
+      },
+      product: {
+        select: {
+          id: true,
+          name: true,
+          images: {
+            take: 1,
+            orderBy: { sortOrder: 'asc' },
+            select: { url: true },
+          },
+        },
+      },
+    },
+  });
+
+  const uniqueReviewableProducts = new Map<string, {
+    id: string;
+    name: string;
+    image: string | null;
+    orderDate: Date;
+    canReview: boolean;
+  }>();
+
+  for (const item of deliveredOrderItems) {
+    if (!item.product || reviewedProductIds.has(item.productId) || uniqueReviewableProducts.has(item.productId)) {
+      continue;
+    }
+
+    uniqueReviewableProducts.set(item.productId, {
+      id: item.productId,
+      name: item.product.name,
+      image: item.product.images[0]?.url ?? null,
+      orderDate: item.order.createdAt,
+      canReview: true,
+    });
+  }
+
+  return {
+    reviews: reviews.map((review) => ({
+      id: review.id,
+      productId: review.productId,
+      productName: review.product.name,
+      productImage: review.product.images[0]?.url ?? null,
+      rating: review.rating,
+      title: review.title ?? 'Untitled review',
+      content: review.comment ?? '',
+      isVerified: review.isVerified,
+      helpfulCount: 0,
+      createdAt: review.createdAt,
+      updatedAt: review.updatedAt,
+    })),
+    reviewableProducts: Array.from(uniqueReviewableProducts.values()),
+  };
+}
 
 export default async function ReviewsPage() {
-  return <ReviewsClient reviews={mockReviews} reviewableProducts={mockReviewableProducts} />;
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    redirect('/login?redirect=/account/reviews');
+  }
+
+  const data = await getReviewsData(session.user.id);
+
+  return <ReviewsClient reviews={data.reviews} reviewableProducts={data.reviewableProducts} />;
 }

@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Heart, ShoppingCart, Home as HomeIcon, User, ChevronRight, Flame } from 'lucide-react';
 import { formatPrice, convertUSDtoBDT } from '@/utils/currency';
+import AddToCartStepper from '@/components/cart/AddToCartStepper';
 
 // Helper: render a real image URL or fall back to emoji text
 function ProductImage({ src, alt }: { src: string; alt: string }) {
@@ -67,9 +68,18 @@ interface Suggestion {
   image?: string;
 }
 
+interface HomeProductCardItem {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  stock: number;
+  hasVariants: boolean;
+}
+
 export default function HomePage() {
   const router = useRouter();
-  const { items, addItem } = useCart();
+  const { items } = useCart();
   const { products } = useProducts();
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -119,21 +129,7 @@ export default function HomePage() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentComboSlide, setCurrentComboSlide] = useState(0);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 7, minutes: 33, seconds: 28 });
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<{ id: string; name: string; slug: string; icon: string; color: string }[]>([]);
-
-  const handleAddToCart = (
-    e: React.MouseEvent,
-    product: { id: string; name: string; price: number; image: string }
-  ) => {
-    e.preventDefault();
-    e.stopPropagation();
-    addItem({ id: product.id, name: product.name, price: product.price, quantity: 1, image: product.image });
-    setAddedIds(prev => new Set(prev).add(product.id));
-    setTimeout(() => {
-      setAddedIds(prev => { const next = new Set(prev); next.delete(product.id); return next; });
-    }, 1500);
-  };
 
   const activeProducts = useMemo(
     () => products.filter(p => p.status === 'active'),
@@ -146,13 +142,29 @@ export default function HomePage() {
       [...activeProducts]
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 8)
-        .map(p => ({ id: p.id, name: p.name, price: p.price, image: p.image, sku: p.category })),
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          image: p.image,
+          sku: p.category,
+          stock: p.stock,
+          hasVariants: Boolean(p.variants?.length),
+        })),
     [activeProducts]
   );
 
   // For You: first 6 active products
   const forYouProducts = useMemo(
-    () => activeProducts.slice(0, 6).map(p => ({ id: p.id, name: p.name, price: p.price, image: p.image })),
+    () =>
+      activeProducts.slice(0, 6).map(p => ({
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        image: p.image,
+        stock: p.stock,
+        hasVariants: Boolean(p.variants?.length),
+      })),
     [activeProducts]
   );
 
@@ -162,7 +174,16 @@ export default function HomePage() {
       [...activeProducts]
         .sort((a, b) => b.rating - a.rating)
         .slice(0, 6)
-        .map(p => ({ id: p.id, name: p.name, price: p.price, rating: Math.round(p.rating), reviews: p.reviews, image: p.image })),
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          rating: Math.round(p.rating),
+          reviews: p.reviews,
+          image: p.image,
+          stock: p.stock,
+          hasVariants: Boolean(p.variants?.length),
+        })),
     [activeProducts]
   );
 
@@ -172,7 +193,16 @@ export default function HomePage() {
       [...activeProducts]
         .sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0))
         .slice(0, 6)
-        .map(p => ({ id: p.id, name: p.name, price: p.price, rating: Math.round(p.rating), reviews: p.reviews, image: p.image })),
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          rating: Math.round(p.rating),
+          reviews: p.reviews,
+          image: p.image,
+          stock: p.stock,
+          hasVariants: Boolean(p.variants?.length),
+        })),
     [activeProducts]
   );
 
@@ -189,9 +219,37 @@ export default function HomePage() {
           originalPrice: p.originalPrice as number,
           discount: Math.round(((p.originalPrice as number - p.price) / (p.originalPrice as number)) * 100),
           image: p.image,
+          stock: p.stock,
+          hasVariants: Boolean(p.variants?.length),
         })),
     [activeProducts]
   );
+
+  const renderHomeCartAction = (product: HomeProductCardItem, className: string) => {
+    if (product.hasVariants) {
+      return (
+        <Link
+          href={`/products/${product.id}`}
+          className={`flex items-center justify-center rounded-2xl bg-[#3D1F0E] px-5 py-3 text-sm font-semibold text-[#F5E6D3] transition-colors hover:bg-[#2A1509] ${className}`}
+        >
+          Select Options
+        </Link>
+      );
+    }
+
+    return (
+      <AddToCartStepper
+        productId={product.id}
+        productName={product.name}
+        productImage={product.image}
+        price={product.price}
+        maxStock={product.stock}
+        className={className}
+        disabled={product.stock === 0}
+        disabledLabel="Out of Stock"
+      />
+    );
+  };
 
   // Fetch categories from API
   useEffect(() => {
@@ -469,12 +527,7 @@ export default function HomePage() {
                   </span>
                 </div>
               </Link>
-              <button
-                onClick={(e) => handleAddToCart(e, product)}
-                className={`w-full py-1.5 rounded-lg text-xs font-semibold transition ${addedIds.has(product.id) ? 'bg-green-500 text-white' : 'bg-minsah-primary text-white hover:bg-minsah-dark'}`}
-              >
-                {addedIds.has(product.id) ? '✓ Added' : '🛒 Add to Cart'}
-              </button>
+              {renderHomeCartAction(product, 'w-full')}
             </div>
           ))}
         </div>
@@ -507,12 +560,7 @@ export default function HomePage() {
                   {formatPrice(convertUSDtoBDT(product.price))}
                 </span>
               </Link>
-              <button
-                onClick={(e) => handleAddToCart(e, product)}
-                className={`w-full py-1.5 rounded-lg text-xs font-semibold transition ${addedIds.has(product.id) ? 'bg-green-500 text-white' : 'bg-minsah-primary text-white hover:bg-minsah-dark'}`}
-              >
-                {addedIds.has(product.id) ? '✓ Added' : '+ Add to Cart'}
-              </button>
+              {renderHomeCartAction(product, 'w-full')}
             </div>
           ))}
         </div>
@@ -544,12 +592,7 @@ export default function HomePage() {
                   {formatPrice(convertUSDtoBDT(product.price))}
                 </span>
               </Link>
-              <button
-                onClick={(e) => handleAddToCart(e, product)}
-                className={`w-full py-1 rounded-lg text-[10px] font-semibold transition ${addedIds.has(product.id) ? 'bg-green-500 text-white' : 'bg-minsah-primary text-white hover:bg-minsah-dark'}`}
-              >
-                {addedIds.has(product.id) ? '✓' : '+ Cart'}
-              </button>
+              {renderHomeCartAction(product, 'w-full')}
             </div>
           ))}
         </div>
@@ -589,12 +632,7 @@ export default function HomePage() {
                   <span className="text-[8px] text-minsah-secondary">({product.reviews})</span>
                 </div>
               </Link>
-              <button
-                onClick={(e) => handleAddToCart(e, product)}
-                className={`w-full py-1 rounded text-[10px] font-semibold transition ${addedIds.has(product.id) ? 'bg-green-500 text-white' : 'bg-minsah-primary text-white hover:bg-minsah-dark'}`}
-              >
-                {addedIds.has(product.id) ? '✓' : '+ Cart'}
-              </button>
+              {renderHomeCartAction(product, 'w-full')}
             </div>
           ))}
         </div>
@@ -626,12 +664,7 @@ export default function HomePage() {
                   {formatPrice(convertUSDtoBDT(product.price))}
                 </span>
               </Link>
-              <button
-                onClick={(e) => handleAddToCart(e, product)}
-                className={`w-full py-1 rounded text-[10px] font-semibold transition ${addedIds.has(product.id) ? 'bg-green-500 text-white' : 'bg-minsah-primary text-white hover:bg-minsah-dark'}`}
-              >
-                {addedIds.has(product.id) ? '✓' : '+ Cart'}
-              </button>
+              {renderHomeCartAction(product, 'w-full')}
             </div>
           ))}
         </div>

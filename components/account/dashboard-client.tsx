@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import {
   ShoppingBag,
@@ -109,7 +108,6 @@ function StatusBadge({ status }: { status: string }) {
 export function DashboardClient({ initialData, quickActions, upcomingFeatures }: DashboardClientProps) {
   const { user } = useAuth();
   const { isVip, isPremium } = useUserPermissions();
-  const [dashboardData] = useState(initialData);
 
   if (!user) return null;
 
@@ -145,9 +143,9 @@ export function DashboardClient({ initialData, quickActions, upcomingFeatures }:
           <div className="shrink-0 rounded-2xl bg-white/15 px-4 py-3 text-right backdrop-blur-sm">
             <p className="text-xs text-purple-100">Loyalty Points</p>
             <p className="text-2xl font-bold">{user.loyaltyPoints.toLocaleString()}</p>
-            {dashboardData.loyaltyPointsExpiring > 0 && (
+            {initialData.loyaltyPointsExpiring > 0 && (
               <p className="mt-0.5 text-xs text-yellow-200">
-                {dashboardData.loyaltyPointsExpiring} expiring soon
+                {initialData.loyaltyPointsExpiring} expiring soon
               </p>
             )}
           </div>
@@ -157,9 +155,9 @@ export function DashboardClient({ initialData, quickActions, upcomingFeatures }:
       {/* ── Stats row ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { icon: <Package size={18} />, label: 'Orders',    value: dashboardData.recentOrders.length, iconBg: 'bg-violet-50 text-violet-500'  },
-          { icon: <Heart size={18} />,   label: 'Wishlist',  value: dashboardData.wishlistItems,       iconBg: 'bg-pink-50 text-pink-500'      },
-          { icon: <MapPin size={18} />,  label: 'Addresses', value: dashboardData.savedAddresses,      iconBg: 'bg-emerald-50 text-emerald-600' },
+          { icon: <Package size={18} />, label: 'Orders',    value: initialData.recentOrders.length, iconBg: 'bg-violet-50 text-violet-500'  },
+          { icon: <Heart size={18} />,   label: 'Wishlist',  value: initialData.wishlistItems,       iconBg: 'bg-pink-50 text-pink-500'      },
+          { icon: <MapPin size={18} />,  label: 'Addresses', value: initialData.savedAddresses,      iconBg: 'bg-emerald-50 text-emerald-600' },
         ].map((s) => (
           <div key={s.label} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white py-4 shadow-sm ring-1 ring-gray-100">
             <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.iconBg}`}>{s.icon}</span>
@@ -191,11 +189,11 @@ export function DashboardClient({ initialData, quickActions, upcomingFeatures }:
       </div>
 
       {/* ── Notification nudge ─────────────────────────────────────────────── */}
-      {dashboardData.unreadNotifications > 0 && (
+      {initialData.unreadNotifications > 0 && (
         <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
           <Bell size={15} className="shrink-0 text-blue-500" />
           <p className="text-sm text-blue-800">
-            You have <strong>{dashboardData.unreadNotifications}</strong> new offers waiting for you.
+            You have <strong>{initialData.unreadNotifications}</strong> new offers waiting for you.
           </p>
         </div>
       )}
@@ -234,7 +232,7 @@ export function DashboardClient({ initialData, quickActions, upcomingFeatures }:
           </Link>
         </div>
 
-        {dashboardData.recentOrders.length === 0 ? (
+        {initialData.recentOrders.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-gray-200 py-10 text-center">
             <ShoppingBag size={30} className="text-gray-300" />
             <p className="text-sm text-gray-400">এখনো কোনো order নেই</p>
@@ -247,7 +245,7 @@ export function DashboardClient({ initialData, quickActions, upcomingFeatures }:
           </div>
         ) : (
           <div className="space-y-2">
-            {dashboardData.recentOrders.map((order) => (
+            {initialData.recentOrders.map((order) => (
               <Link
                 key={order.id}
                 href={`/account/orders/${order.id}`}
@@ -276,14 +274,14 @@ export function DashboardClient({ initialData, quickActions, upcomingFeatures }:
       </div>
 
       {/* ── Points expiry alert ────────────────────────────────────────────── */}
-      {dashboardData.loyaltyPointsExpiring > 0 && (
+      {initialData.loyaltyPointsExpiring > 0 && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-800">Points expiring soon!</p>
             <p className="mt-0.5 text-xs text-amber-700">
-              আপনার {dashboardData.loyaltyPointsExpiring} points{' '}
-              {new Date(dashboardData.expiryDate).toLocaleDateString()} এ expire হবে।
+              আপনার {initialData.loyaltyPointsExpiring} points{' '}
+              {new Date(initialData.expiryDate).toLocaleDateString()} এ expire হবে।
             </p>
             <Link
               href="/account/loyalty"

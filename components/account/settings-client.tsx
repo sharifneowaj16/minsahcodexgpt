@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   User as UserIcon,
   Mail,
@@ -14,16 +15,28 @@ import {
   CheckCircle,
   AlertTriangle
 } from 'lucide-react';
-import type { User } from '@/types/user';
+import { useAuth } from '@/contexts/AuthContext';
 
-interface SettingsClientProps {
-  initialUser: User;
-}
+const EMPTY_PREFERENCES = {
+  newsletter: false,
+  smsNotifications: false,
+  promotions: false,
+  newProducts: false,
+  orderUpdates: false,
+};
 
-export function SettingsClient({ initialUser }: SettingsClientProps) {
-  const [user, setUser] = useState(initialUser);
+export function SettingsClient() {
+  const router = useRouter();
+  const {
+    user,
+    loading,
+    updateUser,
+    updatePreferences,
+    changePassword,
+    uploadAvatar,
+  } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
-  const [saving, setSaving] = useState(false);
+  const [savingSection, setSavingSection] = useState<string | null>(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -33,14 +46,14 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
 
   // Form data
   const [profileData, setProfileData] = useState({
-    firstName: user.firstName,
-    lastName: user.lastName,
-    phone: user.phone,
-    dateOfBirth: user.dateOfBirth?.toISOString().split('T')[0] || '',
-    gender: user.gender || ''
+    firstName: '',
+    lastName: '',
+    phone: '',
+    dateOfBirth: '',
+    gender: ''
   });
 
-  const [preferences, setPreferences] = useState(user.preferences);
+  const [preferences, setPreferences] = useState(EMPTY_PREFERENCES);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -53,64 +66,98 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
     { id: 'security', name: 'Security', icon: ShieldCheck }
   ];
 
+  useEffect(() => {
+    if (!user) return;
+    setProfileData({
+      firstName: user.firstName ?? '',
+      lastName: user.lastName ?? '',
+      phone: user.phone ?? '',
+      dateOfBirth: user.dateOfBirth ? user.dateOfBirth.split('T')[0] : '',
+      gender: user.gender ?? '',
+    });
+    setPreferences(user.preferences ?? EMPTY_PREFERENCES);
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-600">
+            Loading your account settings...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-600">
+            Unable to load your account. Please sign in again.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+    setSavingSection('profile');
     setErrorMessage('');
     setSuccessMessage('');
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     try {
-      // Update user data
-      setUser(prev => ({
-        ...prev,
-        firstName: profileData.firstName,
-        lastName: profileData.lastName,
-        phone: profileData.phone,
-        dateOfBirth: profileData.dateOfBirth ? new Date(profileData.dateOfBirth) : undefined,
-        gender: profileData.gender as 'male' | 'female' | 'other' | undefined
-      }));
+      const success = await updateUser({
+        firstName: profileData.firstName.trim(),
+        lastName: profileData.lastName.trim() || null,
+        phone: profileData.phone.trim() || null,
+        dateOfBirth: profileData.dateOfBirth || null,
+        gender: (profileData.gender || null) as 'male' | 'female' | 'other' | null,
+      });
 
+      if (!success) {
+        throw new Error('Profile update failed');
+      }
+
+      router.refresh();
       setSuccessMessage('Profile updated successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
+    } catch {
       setErrorMessage('Failed to update profile. Please try again.');
       setTimeout(() => setErrorMessage(''), 3000);
     }
 
-    setSaving(false);
+    setSavingSection(null);
   };
 
   const handlePreferencesSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+    setSavingSection('preferences');
     setErrorMessage('');
     setSuccessMessage('');
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     try {
-      setUser(prev => ({
-        ...prev,
-        preferences
-      }));
+      const success = await updatePreferences(preferences);
+      if (!success) {
+        throw new Error('Preferences update failed');
+      }
 
+      router.refresh();
       setSuccessMessage('Preferences updated successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
+    } catch {
       setErrorMessage('Failed to update preferences. Please try again.');
       setTimeout(() => setErrorMessage(''), 3000);
     }
 
-    setSaving(false);
+    setSavingSection(null);
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+    setSavingSection('password');
     setErrorMessage('');
     setSuccessMessage('');
 
@@ -118,21 +165,23 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       setErrorMessage('New passwords do not match');
       setTimeout(() => setErrorMessage(''), 3000);
-      setSaving(false);
+      setSavingSection(null);
       return;
     }
 
     if (passwordData.newPassword.length < 8) {
       setErrorMessage('Password must be at least 8 characters long');
       setTimeout(() => setErrorMessage(''), 3000);
-      setSaving(false);
+      setSavingSection(null);
       return;
     }
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     try {
+      const result = await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      if (!result.success) {
+        throw new Error(result.error || 'Password update failed');
+      }
+
       setSuccessMessage('Password changed successfully!');
       setShowPasswordForm(false);
       setPasswordData({
@@ -142,23 +191,34 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
       });
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
-      setErrorMessage('Current password is incorrect');
+      setErrorMessage(error instanceof Error ? error.message : 'Current password is incorrect');
       setTimeout(() => setErrorMessage(''), 3000);
     }
 
-    setSaving(false);
+    setSavingSection(null);
   };
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // In a real app, you would upload the file to a server
-      console.log('Uploading avatar:', file.name);
-      // For now, just simulate the upload
-      setTimeout(() => {
+      setSavingSection('avatar');
+      setErrorMessage('');
+      setSuccessMessage('');
+      try {
+        const success = await uploadAvatar(file);
+        if (!success) {
+          throw new Error('Avatar upload failed');
+        }
+        router.refresh();
         setSuccessMessage('Avatar updated successfully!');
         setTimeout(() => setSuccessMessage(''), 3000);
-      }, 1000);
+      } catch {
+        setErrorMessage('Failed to upload avatar. Please try again.');
+        setTimeout(() => setErrorMessage(''), 3000);
+      } finally {
+        setSavingSection(null);
+        e.target.value = '';
+      }
     }
   };
 
@@ -219,7 +279,7 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
               <div className="flex items-center space-x-6 mb-8">
                 <div className="relative">
                   <div className="w-24 h-24 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white text-3xl font-bold">
-                    {user.firstName.charAt(0)}{user.lastName.charAt(0)}
+                    {user.firstName?.charAt(0) ?? ''}{user.lastName?.charAt(0) ?? ''}
                   </div>
                   <label className="absolute bottom-0 right-0 bg-purple-600 text-white p-2 rounded-full cursor-pointer hover:bg-purple-700 transition">
                     <Camera className="w-4 h-4" />
@@ -227,6 +287,7 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
                       type="file"
                       accept="image/*"
                       onChange={handleAvatarUpload}
+                      disabled={savingSection === 'avatar'}
                       className="hidden"
                     />
                   </label>
@@ -344,10 +405,10 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={saving}
+                    disabled={savingSection === 'profile'}
                     className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {saving ? 'Saving...' : 'Save Changes'}
+                    {savingSection === 'profile' ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
               </form>
@@ -431,10 +492,10 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={saving}
+                    disabled={savingSection === 'preferences'}
                     className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {saving ? 'Saving...' : 'Save Preferences'}
+                    {savingSection === 'preferences' ? 'Saving...' : 'Save Preferences'}
                   </button>
                 </div>
               </form>
@@ -564,10 +625,10 @@ export function SettingsClient({ initialUser }: SettingsClientProps) {
                         </button>
                         <button
                           type="submit"
-                          disabled={saving}
+                          disabled={savingSection === 'password'}
                           className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {saving ? 'Updating...' : 'Update Password'}
+                          {savingSection === 'password' ? 'Updating...' : 'Update Password'}
                         </button>
                       </div>
                     </form>

@@ -1,88 +1,190 @@
+import { notFound, redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/nextauth';
+import prisma from '@/lib/prisma';
 import { OrderDetailClient } from '@/components/account/order-detail-client';
 
-// Mock order data
-const mockOrderData: Record<string, any> = {
-  '1': {
-    id: '1',
-    orderNumber: 'MB-2024-001',
-    status: 'delivered',
-    paymentStatus: 'paid',
-    paymentMethod: 'credit_card',
-    items: [
-      { id: '1', productName: 'Premium Face Serum', productImage: '💄', quantity: 2, price: 29.99, totalPrice: 59.98, sku: 'PFS-001' },
-      { id: '2', productName: 'Luxury Lipstick Set', productImage: '💋', quantity: 1, price: 24.99, totalPrice: 24.99, sku: 'LLS-002' }
-    ],
-    subtotal: 84.97,
-    shipping: 5.99,
-    tax: 0,
-    discount: 0,
-    total: 90.96,
-    currency: 'USD',
-    createdAt: new Date('2024-01-15'),
-    estimatedDelivery: new Date('2024-01-20'),
-    deliveredAt: new Date('2024-01-19'),
-    trackingNumber: 'TRK123456789',
-    carrier: 'FedEx',
-    shippingAddress: {
-      firstName: 'John',
-      lastName: 'Doe',
-      addressLine1: '123 Beauty Street',
-      addressLine2: 'Apt 4B',
-      city: 'New York',
-      state: 'NY',
-      postalCode: '10001',
-      country: 'United States',
-      phone: '+1 (555) 123-4567'
+interface OrderDetailPageProps {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ print?: string }>;
+}
+
+async function getOrderDetails(orderId: string, userId: string) {
+  const order = await prisma.order.findFirst({
+    where: {
+      id: orderId,
+      userId,
     },
-    billingAddress: {
-      firstName: 'John',
-      lastName: 'Doe',
-      addressLine1: '123 Beauty Street',
-      addressLine2: 'Apt 4B',
-      city: 'New York',
-      state: 'NY',
-      postalCode: '10001',
-      country: 'United States',
-      phone: '+1 (555) 123-4567'
+    include: {
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              slug: true,
+              images: {
+                take: 1,
+                orderBy: { sortOrder: 'asc' },
+                select: { url: true },
+              },
+            },
+          },
+          variant: {
+            select: {
+              id: true,
+              image: true,
+            },
+          },
+        },
+      },
+      returns: {
+        orderBy: { requestDate: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          returnNumber: true,
+          status: true,
+          requestDate: true,
+          refundAmount: true,
+        },
+      },
+      shippingAddress: true,
+      payments: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
     },
-    tracking: [
-      {
-        timestamp: new Date('2024-01-15T10:00:00'),
-        status: 'ordered',
-        description: 'Order placed successfully',
-        location: 'Online'
-      },
-      {
-        timestamp: new Date('2024-01-15T14:30:00'),
-        status: 'confirmed',
-        description: 'Order confirmed and payment processed',
-        location: 'Processing Center'
-      },
-      {
-        timestamp: new Date('2024-01-16T09:15:00'),
-        status: 'processing',
-        description: 'Order is being prepared for shipment',
-        location: 'Warehouse'
-      },
-      {
-        timestamp: new Date('2024-01-17T16:45:00'),
-        status: 'shipped',
-        description: 'Package shipped with FedEx',
-        location: 'New York, NY'
-      },
-      {
-        timestamp: new Date('2024-01-19T11:20:00'),
-        status: 'delivered',
-        description: 'Package delivered successfully',
-        location: 'New York, NY'
-      }
-    ],
-    notes: 'Please leave package at front door if no one is home.'
+  });
+
+  if (!order) {
+    return null;
   }
-};
 
-export default async function OrderDetailPage({ params }: { params: { id: string } }) {
-  const order = mockOrderData[params.id];
+  const tracking = [
+    {
+      timestamp: order.createdAt,
+      status: 'ordered',
+      description: 'Order placed successfully',
+      location: 'Online',
+      completed: true,
+    },
+    {
+      timestamp: order.paidAt ?? order.createdAt,
+      status: 'confirmed',
+      description:
+        order.paymentStatus === 'COMPLETED'
+          ? 'Payment received and order confirmed'
+          : 'Order confirmed and queued for processing',
+      location: 'Processing Center',
+      completed: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'].includes(order.status),
+    },
+    {
+      timestamp: order.updatedAt,
+      status: 'processing',
+      description: 'Order is being prepared for shipment',
+      location: 'Warehouse',
+      completed: ['PROCESSING', 'SHIPPED', 'DELIVERED'].includes(order.status),
+    },
+    {
+      timestamp: order.shippedAt ?? order.updatedAt,
+      status: 'shipped',
+      description: 'Package shipped to courier',
+      location: order.shippingMethod ?? 'Courier Hub',
+      completed: ['SHIPPED', 'DELIVERED'].includes(order.status),
+    },
+    {
+      timestamp: order.deliveredAt ?? order.cancelledAt ?? order.updatedAt,
+      status: order.status === 'CANCELLED' ? 'cancelled' : 'delivered',
+      description:
+        order.status === 'CANCELLED' ? 'Order was cancelled' : 'Package delivered successfully',
+      location: order.shippingAddress?.city ?? 'Destination',
+      completed: ['DELIVERED', 'CANCELLED'].includes(order.status),
+    },
+  ].filter((event) => event.completed);
 
-  return <OrderDetailClient order={order} />;
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status.toLowerCase(),
+    paymentStatus: order.paymentStatus.toLowerCase(),
+    paymentMethod: (order.paymentMethod ?? order.payments[0]?.method ?? 'cod').toLowerCase(),
+    items: order.items.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      productName: item.name,
+      productImage: item.variant?.image ?? item.product?.images?.[0]?.url ?? null,
+      quantity: item.quantity,
+      price: Number(item.price),
+      totalPrice: Number(item.total),
+      sku: item.sku,
+      productSlug: item.product?.slug ?? item.productId,
+    })),
+    subtotal: Number(order.subtotal),
+    shipping: Number(order.shippingCost),
+    tax: Number(order.taxAmount),
+    discount: Number(order.discountAmount),
+    total: Number(order.total),
+    createdAt: order.createdAt,
+    estimatedDelivery:
+      order.deliveredAt ?? new Date(order.createdAt.getTime() + 7 * 24 * 60 * 60 * 1000),
+    deliveredAt: order.deliveredAt,
+    trackingNumber: order.trackingNumber ?? undefined,
+    carrier: order.shippingMethod ?? 'Standard Delivery',
+    steadfastTrackingCode: order.steadfastTrackingCode ?? undefined,
+    shippingAddress: order.shippingAddress
+      ? {
+          firstName: order.shippingAddress.firstName,
+          lastName: order.shippingAddress.lastName,
+          addressLine1: order.shippingAddress.street1,
+          addressLine2: order.shippingAddress.street2,
+          city: order.shippingAddress.city,
+          state: order.shippingAddress.state,
+          postalCode: order.shippingAddress.postalCode,
+          country: order.shippingAddress.country,
+          phone: order.shippingAddress.phone,
+        }
+      : null,
+    billingAddress: order.shippingAddress
+      ? {
+          firstName: order.shippingAddress.firstName,
+          lastName: order.shippingAddress.lastName,
+          addressLine1: order.shippingAddress.street1,
+          addressLine2: order.shippingAddress.street2,
+          city: order.shippingAddress.city,
+          state: order.shippingAddress.state,
+          postalCode: order.shippingAddress.postalCode,
+          country: order.shippingAddress.country,
+          phone: order.shippingAddress.phone,
+        }
+      : null,
+    latestReturn: order.returns[0]
+      ? {
+          id: order.returns[0].id,
+          returnNumber: order.returns[0].returnNumber,
+          status: order.returns[0].status.toLowerCase(),
+          requestDate: order.returns[0].requestDate,
+          refundAmount: Number(order.returns[0].refundAmount),
+        }
+      : null,
+    tracking,
+    notes: order.customerNote ?? order.adminNote ?? '',
+  };
+}
+
+export default async function OrderDetailPage({ params, searchParams }: OrderDetailPageProps) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    redirect('/login?redirect=/account/orders');
+  }
+
+  const { id } = await params;
+  const resolvedSearchParams = await searchParams;
+  const order = await getOrderDetails(id, session.user.id);
+
+  if (!order) {
+    notFound();
+  }
+
+  return <OrderDetailClient order={order} printMode={resolvedSearchParams.print === 'invoice'} />;
 }

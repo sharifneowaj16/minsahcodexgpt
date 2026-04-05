@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { ORDER_STATUS } from '@/types/user';
+import { useCart } from '@/contexts/CartContext';
 import {
   ShoppingBag,
   Calendar,
@@ -37,6 +37,8 @@ function ProductImage({ src, name }: { src: any; name: string }) {
 
 interface OrderItem {
   id: string;
+  productId: string;
+  variantId?: string | null;
   productName: string;
   productImage: any;
   quantity: number;
@@ -58,6 +60,8 @@ interface Order {
   steadfastStatus?: string;
   userPhone?: string;
   canReview: boolean;
+  returnStatus?: string | null;
+  returnNumber?: string | null;
 }
 
 interface OrdersClientProps {
@@ -65,27 +69,23 @@ interface OrdersClientProps {
 }
 
 export function OrdersClient({ initialOrders }: OrdersClientProps) {
-  const [orders] = useState(initialOrders);
-  const [filteredOrders, setFilteredOrders] = useState(initialOrders);
+  const { addItem } = useCart();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [reorderingOrderIds, setReorderingOrderIds] = useState<string[]>([]);
+  const [reorderedOrderIds, setReorderedOrderIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    let filtered = orders;
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (order) =>
-          order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.items.some((item) =>
-            item.productName.toLowerCase().includes(searchTerm.toLowerCase())
-          )
-      );
-    }
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((order) => order.status === statusFilter);
-    }
-    setFilteredOrders(filtered);
-  }, [orders, searchTerm, statusFilter]);
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const filteredOrders = initialOrders.filter((order) => {
+    const matchesSearch = !normalizedSearchTerm ||
+      order.orderNumber.toLowerCase().includes(normalizedSearchTerm) ||
+      order.items.some((item) => item.productName.toLowerCase().includes(normalizedSearchTerm));
+
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -127,12 +127,58 @@ export function OrdersClient({ initialOrders }: OrdersClientProps) {
     return `/track?order=${order.orderNumber}&phone=${order.userPhone || ''}`;
   };
 
+  const getReturnLabel = (order: Order) => {
+    if (!order.returnStatus) {
+      return 'Request Return';
+    }
+
+    return `Return ${order.returnStatus.replace('_', ' ')}`;
+  };
+
+  const handleReorder = async (order: Order) => {
+    if (reorderingOrderIds.includes(order.id) || order.items.length === 0) {
+      return;
+    }
+
+    setErrorMessage('');
+    setReorderingOrderIds((prev) => [...prev, order.id]);
+
+    try {
+      for (const item of order.items) {
+        await addItem({
+          id: item.variantId ?? item.productId,
+          productId: item.productId,
+          variantId: item.variantId ?? null,
+          name: item.productName,
+          price: item.price,
+          quantity: item.quantity,
+          image: typeof item.productImage === 'string' ? item.productImage : '',
+        });
+      }
+
+      setReorderedOrderIds((prev) => [...prev, order.id]);
+      setTimeout(() => {
+        setReorderedOrderIds((prev) => prev.filter((id) => id !== order.id));
+      }, 2200);
+    } catch {
+      setErrorMessage('Failed to add items from this order back to cart. Please try again.');
+    } finally {
+      setReorderingOrderIds((prev) => prev.filter((id) => id !== order.id));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-1">Order History</h1>
         <p className="text-gray-600">Track and manage your orders</p>
       </div>
+
+      {errorMessage && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errorMessage}
+        </div>
+      )}
 
       {/* Search & Filter */}
       <div className="bg-white rounded-lg shadow-sm p-4 flex flex-col sm:flex-row gap-3">
@@ -235,7 +281,7 @@ export function OrdersClient({ initialOrders }: OrdersClientProps) {
                         <p className="font-medium text-gray-900">৳{item.totalPrice.toFixed(2)}</p>
                         {order.canReview && (
                           <Link
-                            href={`/account/reviews/write?productId=${item.id}&orderId=${order.id}`}
+                            href={`/account/reviews/write?productId=${item.productId}&orderId=${order.id}`}
                             className="inline-flex items-center text-xs text-purple-600 hover:text-purple-500 mt-1"
                           >
                             <Star className="w-3 h-3 mr-1" />
@@ -260,15 +306,40 @@ export function OrdersClient({ initialOrders }: OrdersClientProps) {
                       Track Delivery
                     </a>
                   )}
-                  <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  <Link
+                    href={`/account/orders/${order.id}?print=invoice`}
+                    target="_blank"
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
                     <Download className="w-4 h-4 mr-2" />
                     Invoice
+                  </Link>
+                  <button
+                    onClick={() => handleReorder(order)}
+                    disabled={reorderingOrderIds.includes(order.id)}
+                    className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition ${
+                      reorderingOrderIds.includes(order.id)
+                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                        : reorderedOrderIds.includes(order.id)
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    <ShoppingBag className="w-4 h-4 mr-2" />
+                    {reorderingOrderIds.includes(order.id)
+                      ? 'Adding to Cart...'
+                      : reorderedOrderIds.includes(order.id)
+                        ? 'Added to Cart'
+                        : 'Buy Again'}
                   </button>
                   {(order.status === 'delivered' || order.status === 'shipped') && (
-                    <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <Link
+                      href={`/account/orders/${order.id}/return`}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
                       <RotateCcw className="w-4 h-4 mr-2" />
-                      Return
-                    </button>
+                      {getReturnLabel(order)}
+                    </Link>
                   )}
                 </div>
               </div>

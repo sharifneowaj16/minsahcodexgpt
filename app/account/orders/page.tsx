@@ -19,6 +19,21 @@ async function getUserOrders(userId: string) {
               images: { take: 1, orderBy: { sortOrder: 'asc' } },
             },
           },
+          variant: {
+            select: {
+              id: true,
+              image: true,
+            },
+          },
+        },
+      },
+      returns: {
+        orderBy: { requestDate: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          returnNumber: true,
+          status: true,
         },
       },
       shippingAddress: true,
@@ -41,10 +56,14 @@ async function getUserOrders(userId: string) {
     steadfastStatus: order.steadfastStatus ?? undefined,
     userPhone: order.shippingAddress?.phone ?? undefined,
     canReview: order.status === 'DELIVERED',
+    returnStatus: order.returns[0]?.status.toLowerCase() ?? null,
+    returnNumber: order.returns[0]?.returnNumber ?? null,
     items: order.items.map((item) => ({
       id: item.id,
+      productId: item.productId,
+      variantId: item.variantId,
       productName: item.name,
-      productImage: item.product?.images?.[0]?.url ?? null,
+      productImage: item.variant?.image ?? item.product?.images?.[0]?.url ?? null,
       quantity: item.quantity,
       price: Number(item.price),
       totalPrice: Number(item.total),

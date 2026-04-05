@@ -15,7 +15,8 @@ import {
   Home,
   ChevronRight,
   Users,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 import { User } from '@/lib/auth';
 
@@ -31,6 +32,12 @@ const navigation = [
     href: '/account/orders',
     icon: ShoppingBag,
     description: 'Order history and tracking'
+  },
+  {
+    name: 'Returns',
+    href: '/account/returns',
+    icon: RotateCcw,
+    description: 'Return requests and refunds'
   },
   {
     name: 'Wishlist',

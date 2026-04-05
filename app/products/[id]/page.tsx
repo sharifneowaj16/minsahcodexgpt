@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import ProductClient from './components/ProductClient';
-import ProductStickyHeader from './components/ProductStickyHeader';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -56,15 +55,12 @@ export default async function ProductPage({ params }: PageProps) {
 
   if (!data?.product) notFound();
 
-  const { product, reviews, rating, relatedProducts } = data;
+  const { product, reviews, rating, relatedProducts, frequentlyBoughtTogether } = data;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://minsahbeauty.cloud';
   const productUrl = `${baseUrl}/products/${product.slug}`;
 
   return (
     <div className="min-h-screen bg-[#FDF8F3]">
-      {/* Scroll-aware sticky header */}
-      <ProductStickyHeader productName={product.name} price={product.price} />
-
       {/* Breadcrumb */}
       <div className="max-w-6xl mx-auto px-4 py-2.5">
         <nav className="flex items-center gap-1.5 text-xs text-[#8B5E3C]">
@@ -89,6 +85,7 @@ export default async function ProductPage({ params }: PageProps) {
           reviews={reviews}
           rating={rating}
           relatedProducts={relatedProducts}
+          frequentlyBoughtTogether={frequentlyBoughtTogether}
           productUrl={productUrl}
         />
       </main>

@@ -1,71 +1,39 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import prisma from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// PATCH /api/inventory/[id] - adjust stock (add/remove/set)
+const DEPRECATION_DATE = '2026-04-04';
+const REPLACEMENT_PATH = '/api/admin/inventory';
+
+function deprecatedResponse(request: NextRequest, id: string) {
+  const replacementUrl = new URL(REPLACEMENT_PATH, request.url);
+
+  const response = NextResponse.json(
+    {
+      error: 'This inventory item endpoint has been deprecated.',
+      deprecatedAt: DEPRECATION_DATE,
+      replacement: replacementUrl.toString(),
+      replacementPayload: {
+        ids: [id],
+        action: 'add | remove | set | reorder',
+      },
+      message: 'Send this update through the admin inventory workspace endpoint.',
+    },
+    { status: 410 }
+  );
+
+  response.headers.set('X-Deprecated-Endpoint', REPLACEMENT_PATH);
+  response.headers.set('Sunset', DEPRECATION_DATE);
+
+  return response;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params;
-    const body = await request.json();
-
-    const product = await prisma.product.findUnique({ where: { id } });
-    if (!product) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
-    }
-
-    let newQuantity = product.quantity;
-
-    if (body.action === 'add') {
-      const amount = parseInt(body.amount);
-      if (isNaN(amount) || amount <= 0) {
-        return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-      }
-      newQuantity = product.quantity + amount;
-    } else if (body.action === 'remove') {
-      const amount = parseInt(body.amount);
-      if (isNaN(amount) || amount <= 0) {
-        return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-      }
-      newQuantity = Math.max(0, product.quantity - amount);
-    } else if (body.action === 'set') {
-      const quantity = parseInt(body.quantity);
-      if (isNaN(quantity) || quantity < 0) {
-        return NextResponse.json({ error: 'Invalid quantity' }, { status: 400 });
-      }
-      newQuantity = quantity;
-    } else if (body.reorderLevel !== undefined) {
-      // Update reorder level only
-      const level = parseInt(body.reorderLevel);
-      if (isNaN(level) || level < 0) {
-        return NextResponse.json({ error: 'Invalid reorder level' }, { status: 400 });
-      }
-      const updated = await prisma.product.update({
-        where: { id },
-        data: { lowStockThreshold: level },
-      });
-      return NextResponse.json({ id: updated.id, reorderLevel: updated.lowStockThreshold });
-    } else {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-    }
-
-    const updated = await prisma.product.update({
-      where: { id },
-      data: { quantity: newQuantity },
-    });
-
-    return NextResponse.json({
-      id: updated.id,
-      currentStock: updated.quantity,
-      reorderLevel: updated.lowStockThreshold,
-    });
-  } catch (error) {
-    console.error('Error updating inventory:', error);
-    return NextResponse.json({ error: 'Failed to update inventory' }, { status: 500 });
-  }
+  const { id } = await params;
+  return deprecatedResponse(request, id);
 }

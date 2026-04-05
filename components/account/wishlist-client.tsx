@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { formatPrice } from '@/utils/currency';
+import { useCart } from '@/contexts/CartContext';
 import {
   Heart,
   ShoppingBag,
   X,
   Star,
-  Filter,
   Search,
-  Sparkles,
-  Brush,
-  Eye,
   Package
 } from 'lucide-react';
 import { Heart as HeartSolid } from 'lucide-react';
@@ -24,12 +23,12 @@ interface WishlistItem {
   price: number;
   originalPrice: number | null;
   inStock: boolean;
-  addedAt: Date;
+  addedAt: string | Date;
   category: string;
   rating: number;
   reviewCount: number;
   discount?: number;
-  restockDate?: Date;
+  restockDate?: string | Date;
 }
 
 interface WishlistClientProps {
@@ -37,36 +36,43 @@ interface WishlistClientProps {
 }
 
 export function WishlistClient({ initialItems }: WishlistClientProps) {
+  const router = useRouter();
+  const { addItem } = useCart();
   const [wishlistItems, setWishlistItems] = useState(initialItems);
-  const [filteredItems, setFilteredItems] = useState(initialItems);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('dateAdded');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [removingIds, setRemovingIds] = useState<string[]>([]);
+  const [addingToCartIds, setAddingToCartIds] = useState<string[]>([]);
+  const [addedToCartIds, setAddedToCartIds] = useState<string[]>([]);
 
-  // Get unique categories
-  const categories = ['all', ...Array.from(new Set(initialItems.map(item => item.category)))];
+  const toDateValue = (value: string | Date) => new Date(value);
 
-  useEffect(() => {
+  const categories = useMemo(
+    () => ['all', ...Array.from(new Set(wishlistItems.map((item) => item.category)))],
+    [wishlistItems]
+  );
+
+  const filteredItems = useMemo(() => {
     let filtered = [...wishlistItems];
+    const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
-    // Filter by search term
-    if (searchTerm) {
+    if (normalizedSearchTerm) {
       filtered = filtered.filter(item =>
-        item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase())
+        item.productName.toLowerCase().includes(normalizedSearchTerm) ||
+        item.category.toLowerCase().includes(normalizedSearchTerm)
       );
     }
 
-    // Filter by category
     if (categoryFilter !== 'all') {
       filtered = filtered.filter(item => item.category === categoryFilter);
     }
 
-    // Sort items
     switch (sortBy) {
       case 'dateAdded':
-        filtered.sort((a, b) => b.addedAt.getTime() - a.addedAt.getTime());
+        filtered.sort((a, b) => toDateValue(b.addedAt).getTime() - toDateValue(a.addedAt).getTime());
         break;
       case 'priceLow':
         filtered.sort((a, b) => a.price - b.price);
@@ -82,23 +88,81 @@ export function WishlistClient({ initialItems }: WishlistClientProps) {
         break;
     }
 
-    setFilteredItems(filtered);
+    return filtered;
   }, [wishlistItems, searchTerm, categoryFilter, sortBy]);
 
-  const handleRemoveItem = (itemId: string) => {
-    setWishlistItems(prev => prev.filter(item => item.id !== itemId));
-    setSelectedItems(prev => prev.filter(id => id !== itemId));
+  const handleRemoveItem = async (itemId: string) => {
+    setErrorMessage('');
+    setRemovingIds((prev) => [...prev, itemId]);
+
+    try {
+      const response = await fetch(`/api/wishlist/${itemId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error('Failed to remove item');
+      }
+
+      setWishlistItems((prev) => prev.filter((item) => item.id !== itemId));
+      setSelectedItems((prev) => prev.filter((id) => id !== itemId));
+      router.refresh();
+    } catch {
+      setErrorMessage('Failed to remove wishlist item. Please try again.');
+    } finally {
+      setRemovingIds((prev) => prev.filter((id) => id !== itemId));
+    }
   };
 
-  const handleRemoveSelected = () => {
-    setWishlistItems(prev => prev.filter(item => !selectedItems.includes(item.id)));
-    setSelectedItems([]);
+  const handleRemoveSelected = async () => {
+    if (selectedItems.length === 0) return;
+
+    setErrorMessage('');
+    setRemovingIds((prev) => [...new Set([...prev, ...selectedItems])]);
+
+    try {
+      const responses = await Promise.all(
+        selectedItems.map((itemId) => fetch(`/api/wishlist/${itemId}`, { method: 'DELETE' }))
+      );
+
+      if (responses.some((response) => !response.ok)) {
+        throw new Error('Failed to remove selected items');
+      }
+
+      setWishlistItems((prev) => prev.filter((item) => !selectedItems.includes(item.id)));
+      setSelectedItems([]);
+      router.refresh();
+    } catch {
+      setErrorMessage('Failed to remove selected wishlist items. Please try again.');
+    } finally {
+      setRemovingIds([]);
+    }
   };
 
-  const handleMoveToCart = (productId: string) => {
-    // In a real app, this would add the item to the cart
-    console.log('Moving item to cart:', productId);
-    // You could show a toast notification here
+  const handleMoveToCart = async (item: WishlistItem) => {
+    if (!item.inStock || addingToCartIds.includes(item.id)) {
+      return;
+    }
+
+    setErrorMessage('');
+    setAddingToCartIds((prev) => [...prev, item.id]);
+
+    try {
+      await addItem({
+        id: item.productId,
+        productId: item.productId,
+        name: item.productName,
+        price: item.price,
+        quantity: 1,
+        image: typeof item.productImage === 'string' ? item.productImage : '',
+      });
+
+      setAddedToCartIds((prev) => [...prev, item.id]);
+      setTimeout(() => {
+        setAddedToCartIds((prev) => prev.filter((id) => id !== item.id));
+      }, 1800);
+    } catch {
+      setErrorMessage('Failed to add item to cart. Please try again.');
+    } finally {
+      setAddingToCartIds((prev) => prev.filter((id) => id !== item.id));
+    }
   };
 
   const handleSelectItem = (itemId: string) => {
@@ -116,6 +180,18 @@ export function WishlistClient({ initialItems }: WishlistClientProps) {
       setSelectedItems(filteredItems.map(item => item.id));
     }
   };
+
+  function ProductImage({ src, name }: { src: any; name: string }) {
+    if (typeof src === 'string' && (src.startsWith('/') || src.startsWith('http'))) {
+      return <img src={src} alt={name} className="w-full h-full object-cover" />;
+    }
+
+    if (src && typeof src === 'object') {
+      return src;
+    }
+
+    return <Package className="w-12 h-12 text-purple-400" />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -145,6 +221,12 @@ export function WishlistClient({ initialItems }: WishlistClientProps) {
             )}
           </div>
         </div>
+
+        {errorMessage && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </div>
+        )}
 
         {/* Filters and Controls */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -241,13 +323,14 @@ export function WishlistClient({ initialItems }: WishlistClientProps) {
                   {/* Product Image */}
                   <div className="relative">
                     <div className="aspect-square bg-gradient-to-br from-pink-100 to-purple-100 flex items-center justify-center">
-                      {item.productImage}
+                      <ProductImage src={item.productImage} name={item.productName} />
                     </div>
 
                     {/* Actions Overlay */}
                     <div className="absolute top-2 right-2 flex flex-col space-y-2">
                       <button
                         onClick={() => handleRemoveItem(item.id)}
+                        disabled={removingIds.includes(item.id)}
                         className="p-2 bg-white rounded-full shadow-md hover:shadow-lg transition-shadow"
                       >
                         <X className="w-4 h-4 text-gray-600" />
@@ -287,7 +370,7 @@ export function WishlistClient({ initialItems }: WishlistClientProps) {
                           <p className="text-gray-900 font-medium mb-1">Out of Stock</p>
                           {item.restockDate && (
                             <p className="text-sm text-gray-600">
-                              Expected: {item.restockDate.toLocaleDateString()}
+                              Expected: {toDateValue(item.restockDate).toLocaleDateString()}
                             </p>
                           )}
                         </div>
@@ -329,11 +412,11 @@ export function WishlistClient({ initialItems }: WishlistClientProps) {
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <span className="text-lg font-bold text-gray-900">
-                          ${item.price.toFixed(2)}
+                          {formatPrice(item.price)}
                         </span>
                         {item.originalPrice && (
                           <span className="text-sm text-gray-500 line-through ml-2">
-                            ${item.originalPrice.toFixed(2)}
+                            {formatPrice(item.originalPrice)}
                           </span>
                         )}
                       </div>
@@ -349,15 +432,21 @@ export function WishlistClient({ initialItems }: WishlistClientProps) {
                     {/* Actions */}
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => handleMoveToCart(item.productId)}
-                        disabled={!item.inStock}
+                        onClick={() => handleMoveToCart(item)}
+                        disabled={!item.inStock || addingToCartIds.includes(item.id)}
                         className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${
-                          item.inStock
+                          item.inStock && !addingToCartIds.includes(item.id)
                             ? 'bg-purple-600 text-white hover:bg-purple-700'
                             : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                         }`}
                       >
-                        {item.inStock ? 'Add to Cart' : 'Out of Stock'}
+                        {!item.inStock
+                          ? 'Out of Stock'
+                          : addingToCartIds.includes(item.id)
+                            ? 'Adding...'
+                            : addedToCartIds.includes(item.id)
+                              ? 'Added!'
+                              : 'Add to Cart'}
                       </button>
                       <Link
                         href={`/products/${item.productId}`}

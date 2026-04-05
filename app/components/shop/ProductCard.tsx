@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Heart, ShoppingCart } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { Product } from '@/types/product';
 import { formatPrice } from '@/lib/shopUtils';
-import { useCart } from '@/contexts/CartContext';
+import AddToCartStepper from '@/components/cart/AddToCartStepper';
 
 interface ProductCardProps {
   product: Product;
@@ -21,30 +21,11 @@ function ProductImage({ src, alt }: { src: string; alt: string }) {
 }
 
 export default function ProductCard({ product, onQuickView }: ProductCardProps) {
-  const { addItem } = useCart();
   const [isWishlisted, setIsWishlisted] = useState(false);
-  const [isAddingToCart, setIsAddingToCart] = useState(false);
 
   const handleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsWishlisted(!isWishlisted);
-  };
-
-  const handleAddToCart = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (product.stock === 0 || isAddingToCart) return;
-
-    addItem({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      quantity: 1,
-      image: product.image,
-      sku: product.sku,
-    });
-
-    setIsAddingToCart(true);
-    setTimeout(() => setIsAddingToCart(false), 1500);
   };
 
   const renderBadges = () => {
@@ -89,7 +70,6 @@ export default function ProductCard({ product, onQuickView }: ProductCardProps) 
 
   return (
     <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden group">
-      {/* Product Image */}
       <Link href={`/products/${product.id}`} className="block relative">
         <div className="relative w-full aspect-square bg-minsah-accent/30 flex items-center justify-center overflow-hidden">
           <ProductImage src={product.image} alt={product.name} />
@@ -111,7 +91,6 @@ export default function ProductCard({ product, onQuickView }: ProductCardProps) 
         </div>
       </Link>
 
-      {/* Product Info */}
       <div className="p-3 md:p-4">
         <Link href={`/shop?brand=${product.brandSlug}`}>
           <p className="text-xs text-minsah-secondary uppercase font-medium mb-1 hover:text-minsah-primary transition-colors">
@@ -157,24 +136,21 @@ export default function ProductCard({ product, onQuickView }: ProductCardProps) 
           {product.hasVariants ? (
             <Link
               href={`/products/${product.id}`}
-              className="flex-1 px-3 py-2 bg-minsah-primary text-white text-sm font-semibold rounded-lg hover:bg-minsah-dark transition-colors text-center"
+              className="flex-1 flex items-center justify-center px-5 py-3 rounded-2xl bg-[#3D1F0E] text-[#F5E6D3] text-sm font-semibold transition-colors hover:bg-[#2A1509]"
             >
               Select Options
             </Link>
           ) : (
-            <button
-              onClick={handleAddToCart}
-              disabled={product.stock === 0 || isAddingToCart}
-              className={`flex-1 px-3 py-2 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                product.stock === 0
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : isAddingToCart
-                  ? 'bg-green-500 text-white'
-                  : 'bg-minsah-primary text-white hover:bg-minsah-dark'
-              }`}
-            >
-              {product.stock === 0 ? 'Out of Stock' : isAddingToCart ? <>✓ Added!</> : <><ShoppingCart size={16} /> Add to Cart</>}
-            </button>
+            <AddToCartStepper
+              productId={product.id}
+              productName={product.name}
+              productImage={product.image}
+              price={product.price}
+              maxStock={product.stock}
+              className="w-full flex-1"
+              disabled={product.stock === 0}
+              disabledLabel="Out of Stock"
+            />
           )}
         </div>
 

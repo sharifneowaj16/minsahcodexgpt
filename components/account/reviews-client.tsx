@@ -1,6 +1,7 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Star, Edit, Trash2, Search, Plus, Eye, Heart, MessageCircle, Check, X, ShoppingBag, Package } from 'lucide-react';
 import { Star as StarSolid } from 'lucide-react';
 
@@ -25,54 +26,86 @@ function ProductImage({ src, name }: { src: any; name: string }) {
   return <Package className="w-8 h-8 text-purple-400" />;
 }
 
+interface ReviewItem {
+  id: string;
+  productId: string;
+  productName: string;
+  productImage: string | null;
+  rating: number;
+  title: string;
+  content: string;
+  isVerified: boolean;
+  helpfulCount: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+interface ReviewableProduct {
+  id: string;
+  name: string;
+  image: string | null;
+  orderDate: string | Date;
+  canReview: boolean;
+}
+
 interface ReviewsClientProps {
-  reviews: any[];
-  reviewableProducts: any[];
+  reviews: ReviewItem[];
+  reviewableProducts: ReviewableProduct[];
 }
 
 export function ReviewsClient({ reviews: initialReviews, reviewableProducts }: ReviewsClientProps) {
+  const router = useRouter();
   const [reviews, setReviews] = useState(initialReviews);
-  const [filteredReviews, setFilteredReviews] = useState(initialReviews);
   const [searchTerm, setSearchTerm] = useState('');
   const [ratingFilter, setRatingFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('my-reviews');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
 
   const tabs = [
     { id: 'my-reviews', name: 'My Reviews', count: reviews.length },
     { id: 'write-review', name: 'Write Review', count: reviewableProducts.length },
   ];
 
-  const handleDeleteReview = (reviewId: string) => {
-    if (confirm('Are you sure you want to delete this review?')) {
-      const updated = reviews.filter((r) => r.id !== reviewId);
-      setReviews(updated);
-      setFilteredReviews(updated);
-    }
-  };
-
-  const handleSearch = (term: string) => {
-    setSearchTerm(term);
-    applyFilters(term, ratingFilter);
-  };
-
-  const handleRatingFilter = (rating: string) => {
-    setRatingFilter(rating);
-    applyFilters(searchTerm, rating);
-  };
-
-  const applyFilters = (term: string, rating: string) => {
+  const filteredReviews = useMemo(() => {
     let filtered = reviews;
-    if (term) {
-      filtered = filtered.filter(
-        (r) =>
-          r.productName?.toLowerCase().includes(term.toLowerCase()) ||
-          r.title?.toLowerCase().includes(term.toLowerCase())
+    const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+
+    if (normalizedSearchTerm) {
+      filtered = filtered.filter((review) =>
+        review.productName.toLowerCase().includes(normalizedSearchTerm) ||
+        review.title.toLowerCase().includes(normalizedSearchTerm)
       );
     }
-    if (rating !== 'all') {
-      filtered = filtered.filter((r) => r.rating === parseInt(rating));
+
+    if (ratingFilter !== 'all') {
+      filtered = filtered.filter((review) => review.rating === Number.parseInt(ratingFilter, 10));
     }
-    setFilteredReviews(filtered);
+
+    return filtered;
+  }, [reviews, searchTerm, ratingFilter]);
+
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!confirm('Are you sure you want to delete this review?')) {
+      return;
+    }
+
+    setErrorMessage('');
+    setDeletingReviewId(reviewId);
+
+    try {
+      const response = await fetch(`/api/reviews/${reviewId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error('Failed to delete review');
+      }
+
+      setReviews((prev) => prev.filter((review) => review.id !== reviewId));
+      router.refresh();
+    } catch {
+      setErrorMessage('Failed to delete review. Please try again.');
+    } finally {
+      setDeletingReviewId(null);
+    }
   };
 
   const renderStars = (rating: number) => (
@@ -93,6 +126,12 @@ export function ReviewsClient({ reviews: initialReviews, reviewableProducts }: R
         <h1 className="text-3xl font-bold text-gray-900 mb-1">My Reviews</h1>
         <p className="text-gray-600">Manage your product reviews</p>
       </div>
+
+      {errorMessage && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errorMessage}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow-sm">
@@ -131,13 +170,13 @@ export function ReviewsClient({ reviews: initialReviews, reviewableProducts }: R
                 type="text"
                 placeholder="Search reviews..."
                 value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
             <select
               value={ratingFilter}
-              onChange={(e) => handleRatingFilter(e.target.value)}
+              onChange={(e) => setRatingFilter(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="all">All Ratings</option>
@@ -196,11 +235,15 @@ export function ReviewsClient({ reviews: initialReviews, reviewableProducts }: R
                       </div>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <button className="p-2 text-gray-400 hover:text-purple-600 rounded-lg transition">
+                      <Link
+                        href={`/account/reviews/write?reviewId=${review.id}`}
+                        className="p-2 text-gray-400 hover:text-purple-600 rounded-lg transition"
+                      >
                         <Edit className="w-4 h-4" />
-                      </button>
+                      </Link>
                       <button
                         onClick={() => handleDeleteReview(review.id)}
+                        disabled={deletingReviewId === review.id}
                         className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition"
                       >
                         <Trash2 className="w-4 h-4" />

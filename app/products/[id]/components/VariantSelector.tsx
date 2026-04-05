@@ -16,6 +16,7 @@ interface Variant {
 interface VariantSelectorProps {
   variants: Variant[];
   basePrice: number;
+  baseStock: number;
   onVariantChange: (variantId: string | null, price: number, qty: number) => void;
   onImageChange?: (imageUrl: string | null) => void; // NEW: notify parent when variant image changes
 }
@@ -23,6 +24,7 @@ interface VariantSelectorProps {
 export default function VariantSelector({
   variants,
   basePrice,
+  baseStock,
   onVariantChange,
   onImageChange,
 }: VariantSelectorProps) {
@@ -33,7 +35,7 @@ export default function VariantSelector({
 
   const currentVariant = variants.find((v) => v.id === selectedVariant);
   const currentPrice   = currentVariant?.price ?? basePrice;
-  const maxStock       = currentVariant?.stock ?? 99;
+  const maxStock       = currentVariant?.stock ?? baseStock;
 
   const handleVariantSelect = (variantId: string) => {
     const v = variants.find((x) => x.id === variantId);
@@ -129,18 +131,34 @@ export default function VariantSelector({
               const variant    = variants.find((v) => v.attributes?.color === color);
               const isSelected = currentVariant?.attributes?.color === color;
               const hasImage   = !!variant?.image;
+              const outOfStock = !variant || variant.stock === 0;
               return (
                 <button key={color} onClick={() => variant && handleVariantSelect(variant.id)}
+                  disabled={outOfStock}
                   title={color}
-                  className={`relative flex flex-col items-center gap-1 transition-all duration-200 ${isSelected ? 'scale-105' : 'hover:scale-105'}`}>
+                  className={`relative flex flex-col items-center gap-1 transition-all duration-200 ${
+                    outOfStock
+                      ? 'cursor-not-allowed opacity-45'
+                      : isSelected
+                        ? 'scale-105'
+                        : 'hover:scale-105'
+                  }`}>
                   {hasImage ? (
-                    <div className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all ${isSelected ? 'border-[#3D1F0E] shadow-md' : 'border-[#D4B896] hover:border-[#3D1F0E]'}`}>
+                    <div className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all ${
+                      isSelected
+                        ? 'border-[#3D1F0E] shadow-md'
+                        : outOfStock
+                          ? 'border-gray-200'
+                          : 'border-[#D4B896] hover:border-[#3D1F0E]'
+                    }`}>
                       <img src={variant!.image!} alt={color} className="w-full h-full object-cover" />
                     </div>
                   ) : (
                     <div className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 ${
                       isSelected
                         ? 'bg-[#3D1F0E] text-[#F5E6D3] border-[#3D1F0E]'
+                        : outOfStock
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 line-through'
                         : 'bg-transparent text-[#3D1F0E] border-[#D4B896] hover:border-[#3D1F0E]'
                     }`}>
                       {color}
@@ -150,6 +168,9 @@ export default function VariantSelector({
                     <span className={`text-[9px] font-medium leading-tight text-center max-w-[56px] truncate ${isSelected ? 'text-[#3D1F0E]' : 'text-[#8B5E3C]'}`}>
                       {color}
                     </span>
+                  )}
+                  {outOfStock && (
+                    <span className="text-[9px] font-medium text-red-500">Stock out</span>
                   )}
                   {isSelected && hasImage && (
                     <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#3D1F0E] rounded-full flex items-center justify-center">

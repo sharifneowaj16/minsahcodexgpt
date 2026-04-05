@@ -11,6 +11,11 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    type FrequentlyBoughtRow = {
+      productId: string;
+      orderCount: number;
+      totalUnits: number;
+    };
 
     const product = await prisma.product.findFirst({
       where: { OR: [{ id }, { slug: id }] },
@@ -36,12 +41,53 @@ export async function GET(
     }
 
     const mainImage = product.images.find((i) => i.isDefault) || product.images[0];
+    const frequentlyBoughtRows = await prisma.$queryRaw<FrequentlyBoughtRow[]>`
+      SELECT
+        companion."productId" AS "productId",
+        COUNT(DISTINCT companion."orderId")::int AS "orderCount",
+        COALESCE(SUM(companion."quantity"), 0)::int AS "totalUnits"
+      FROM "OrderItem" source_item
+      INNER JOIN "Order" source_order
+        ON source_order."id" = source_item."orderId"
+      INNER JOIN "OrderItem" companion
+        ON companion."orderId" = source_item."orderId"
+       AND companion."productId" <> source_item."productId"
+      INNER JOIN "Product" companion_product
+        ON companion_product."id" = companion."productId"
+      WHERE source_item."productId" = ${product.id}
+        AND source_order."status" IN ('SHIPPED', 'DELIVERED')
+        AND source_order."paymentStatus" IN ('PROCESSING', 'COMPLETED')
+        AND companion_product."isActive" = true
+      GROUP BY companion."productId"
+      ORDER BY "orderCount" DESC, "totalUnits" DESC
+      LIMIT 4
+    `;
+
+    const frequentlyBoughtProducts = frequentlyBoughtRows.length
+      ? await prisma.product.findMany({
+          where: {
+            id: { in: frequentlyBoughtRows.map((row) => row.productId) },
+            isActive: true,
+          },
+          include: {
+            images: { where: { isDefault: true }, take: 1 },
+            variants: { select: { id: true }, take: 1 },
+          },
+        })
+      : [];
+
+    const frequentlyBoughtMap = new Map(
+      frequentlyBoughtProducts.map((relatedProduct) => [relatedProduct.id, relatedProduct])
+    );
 
     const relatedProducts = product.categoryId
       ? await prisma.product.findMany({
           where: { categoryId: product.categoryId, id: { not: product.id }, isActive: true },
           take: 4,
-          include: { images: { where: { isDefault: true }, take: 1 } },
+          include: {
+            images: { where: { isDefault: true }, take: 1 },
+            variants: { select: { id: true }, take: 1 },
+          },
         })
       : [];
 
@@ -112,7 +158,32 @@ export async function GET(
         price:         rp.price.toNumber(),
         originalPrice: rp.compareAtPrice ? rp.compareAtPrice.toNumber() : null,
         image:         rp.images[0]?.url || '',
+        stock:         rp.quantity,
+        hasVariants:   rp.variants.length > 0,
       })),
+      frequentlyBoughtTogether: frequentlyBoughtRows
+        .map((row) => {
+          const relatedProduct = frequentlyBoughtMap.get(row.productId);
+          if (!relatedProduct) {
+            return null;
+          }
+
+          return {
+            id: relatedProduct.id,
+            name: relatedProduct.name,
+            slug: relatedProduct.slug,
+            price: relatedProduct.price.toNumber(),
+            originalPrice: relatedProduct.compareAtPrice
+              ? relatedProduct.compareAtPrice.toNumber()
+              : null,
+            image: relatedProduct.images[0]?.url || '',
+            stock: relatedProduct.quantity,
+            hasVariants: relatedProduct.variants.length > 0,
+            orderCount: row.orderCount,
+            totalUnits: row.totalUnits,
+          };
+        })
+        .filter(Boolean),
     });
   } catch (error) {
     console.error('GET /api/products/[id] error:', error);

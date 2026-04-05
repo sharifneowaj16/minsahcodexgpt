@@ -9,12 +9,17 @@ interface User {
   firstName: string | null;
   lastName: string | null;
   phone: string | null;
+  dateOfBirth?: string | null;
+  gender?: 'male' | 'female' | 'other' | null;
   avatar: string | null;
   role: string;
   status: string;
   emailVerified: boolean;
+  phoneVerified?: boolean;
   loyaltyPoints: number;
   referralCode: string | null;
+  createdAt?: string;
+  lastLoginAt?: string | null;
   preferences?: {
     newsletter: boolean;
     smsNotifications: boolean;
@@ -201,7 +206,10 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
       const data = await response.json();
 
       if (response.ok) {
-        setUser(data.user);
+        const profileLoaded = await fetchUserProfile();
+        if (!profileLoaded) {
+          setUser(data.user);
+        }
         return { success: true };
       } else {
         const errorMessage = data.error || 'Login failed';
@@ -262,7 +270,10 @@ function AuthProviderContent({ children }: { children: React.ReactNode }) {
       const data = await response.json();
 
       if (response.ok) {
-        setUser(data.user);
+        const profileLoaded = await fetchUserProfile();
+        if (!profileLoaded) {
+          setUser(data.user);
+        }
         return { success: true };
       } else {
         const errorMessage = data.error || 'Registration failed';

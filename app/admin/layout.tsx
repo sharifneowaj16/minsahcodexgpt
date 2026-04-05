@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { AdminAuthProvider } from '@/contexts/AdminAuthContext';
+import { AdminInventoryProvider } from '@/contexts/AdminInventoryContext';
 import { CategoriesProvider } from '@/contexts/CategoriesContext';
 import AdminLayoutWrapper from './AdminLayoutWrapper';
 
@@ -27,9 +28,11 @@ export default function AdminRootLayout({ children }: AdminLayoutProps) {
 
   return (
     <AdminAuthProvider>
-      <CategoriesProvider>
-        <AdminLayoutWrapper>{children}</AdminLayoutWrapper>
-      </CategoriesProvider>
+      <AdminInventoryProvider>
+        <CategoriesProvider>
+          <AdminLayoutWrapper>{children}</AdminLayoutWrapper>
+        </CategoriesProvider>
+      </AdminInventoryProvider>
     </AdminAuthProvider>
   );
 }
