@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getAuthenticatedUserId } from '@/app/api/auth/_utils';
 
+type ReturnItemInput = {
+  orderItemId?: unknown;
+  quantity?: unknown;
+};
+
 function generateReturnNumber() {
   const stamp = Date.now().toString(36).toUpperCase();
   return `RET-${stamp}`;
@@ -18,9 +23,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const orderId = typeof body.orderId === 'string' ? body.orderId : '';
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
-    const items = Array.isArray(body.items) ? body.items : [];
+    const items: ReturnItemInput[] = Array.isArray(body.items) ? body.items : [];
     const images = Array.isArray(body.images)
-      ? body.images.filter((image): image is string => typeof image === 'string' && image.trim().length > 0)
+      ? (body.images as unknown[]).filter((image): image is string => typeof image === 'string' && image.trim().length > 0)
       : [];
 
     if (!orderId) {

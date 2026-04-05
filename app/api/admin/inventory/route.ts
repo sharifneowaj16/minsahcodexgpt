@@ -481,7 +481,7 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json();
     const ids = Array.isArray(body.ids)
-      ? body.ids.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
+      ? (body.ids as unknown[]).filter((id): id is string => typeof id === 'string' && id.trim().length > 0)
       : [];
     const action = typeof body.action === 'string' ? body.action : '';
 

@@ -13,6 +13,13 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+type PurchaseOrderItemInput = {
+  productId?: unknown;
+  quantity?: unknown;
+  unitCost?: unknown;
+  notes?: unknown;
+};
+
 function buildOrderNumber() {
   const now = new Date();
   const datePart = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`;
@@ -84,7 +91,7 @@ export async function POST(request: NextRequest) {
     const notes = typeof body.notes === 'string' ? body.notes.trim() : '';
     const shippingCost = parseMoney(body.shippingCost ?? 0, 'shipping cost');
     const taxAmount = parseMoney(body.taxAmount ?? 0, 'tax amount');
-    const items = Array.isArray(body.items) ? body.items : [];
+    const items: PurchaseOrderItemInput[] = Array.isArray(body.items) ? body.items : [];
 
     if (!supplierId) {
       return NextResponse.json({ error: 'supplierId is required' }, { status: 400 });
