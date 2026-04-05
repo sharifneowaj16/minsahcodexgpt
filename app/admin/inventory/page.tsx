@@ -7,6 +7,7 @@ import { clsx } from 'clsx';
 import {
   AlertTriangle,
   CheckCircle,
+  Eye,
   Minus,
   Package,
   Plus,
