@@ -130,6 +130,8 @@ export async function GET(
         skinType:         product.skinType       || [],
         codAvailable:     product.codAvailable,
         returnEligible:   product.returnEligible,
+        weight:           product.weight ? product.weight.toNumber() : null,
+        shippingWeight:   product.shippingWeight || '',
         metaTitle:        product.metaTitle      || '',
         metaDescription:  product.metaDescription || '',
         ogTitle:          product.ogTitle         || '',
@@ -143,6 +145,15 @@ export async function GET(
           stock:      v.quantity,
           attributes: v.attributes || {},
           image:      v.image || '',
+          weight:
+            typeof v.attributes === 'object' &&
+            v.attributes !== null &&
+            'weight' in v.attributes &&
+            typeof v.attributes.weight === 'number'
+              ? v.attributes.weight
+              : product.weight
+                ? product.weight.toNumber()
+                : null,
         })),
       },
       reviews,

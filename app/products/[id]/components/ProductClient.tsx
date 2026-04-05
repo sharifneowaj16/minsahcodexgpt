@@ -35,6 +35,7 @@ interface Variant {
   stock: number;
   attributes: Record<string, string> | null;
   image?: string;
+  weight?: number | null;
 }
 
 interface Review {
@@ -112,6 +113,7 @@ interface ProductClientProps {
     skinType?: string[];
     codAvailable?: boolean;
     returnEligible?: boolean;
+    weight?: number | null;
     variants: Variant[];
   };
   reviews: Review[];
@@ -738,11 +740,21 @@ export default function ProductClient({
         productImage={product.image}
         price={totalPrice}
         unitPrice={currentPrice}
+        weightKg={product.weight ?? null}
         variantId={selectedVariantId}
         variantName={variantNameLabel}
         size={variantSize}
         color={variantColor}
         variantImage={variantImage}
+        variants={product.variants.map((variant) => ({
+          id: variant.id,
+          name: variant.name,
+          price: variant.price,
+          stock: variant.stock,
+          image: variant.image ?? null,
+          weight: variant.weight ?? product.weight ?? null,
+          attributes: variant.attributes ?? {},
+        }))}
         quantity={quantity}
         maxStock={activeStock}
         inStock={activeInStock}
