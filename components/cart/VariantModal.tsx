@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, X } from 'lucide-react';
+import { Check, Loader2, Minus, Plus, X } from 'lucide-react';
 
 export interface VariantOption {
   id: string;
@@ -21,14 +21,24 @@ export interface VariantSelectionPayload {
   variant: VariantOption;
 }
 
+export interface VariantAdjustmentPayload {
+  variant: VariantOption;
+  delta: 1 | -1;
+}
+
+export type VariantModalMode = 'select' | 'increase' | 'decrease';
+
 interface VariantModalProps {
   isOpen: boolean;
+  mode: VariantModalMode;
   productId: string;
   productName?: string;
   productImage?: string;
   variants?: VariantOption[];
+  currentVariantId?: string | null;
   onClose: () => void;
-  onConfirm: (payload: VariantSelectionPayload) => Promise<void> | void;
+  onConfirm?: (payload: VariantSelectionPayload) => Promise<void> | void;
+  onAdjust?: (payload: VariantAdjustmentPayload) => Promise<void> | void;
 }
 
 interface ProductResponse {
@@ -61,21 +71,28 @@ function normalizeVariants(variants: VariantModalProps['variants']): VariantOpti
   }));
 }
 
+function toVariantLabel(variant: VariantOption) {
+  return [variant.attributes.size, variant.attributes.color].filter(Boolean).join(' / ') || variant.name;
+}
+
 export default function VariantModal({
   isOpen,
+  mode,
   productId,
   productName,
   productImage,
   variants,
+  currentVariantId,
   onClose,
   onConfirm,
+  onAdjust,
 }: VariantModalProps) {
   const [resolvedProductName, setResolvedProductName] = useState(productName ?? '');
   const [resolvedProductImage, setResolvedProductImage] = useState(productImage ?? '');
   const [resolvedBasePrice, setResolvedBasePrice] = useState(0);
   const [resolvedVariants, setResolvedVariants] = useState<VariantOption[]>(normalizeVariants(variants));
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(currentVariantId ?? null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +122,7 @@ export default function VariantModal({
     setResolvedProductImage(productImage ?? '');
     setResolvedVariants(prefetchedVariants);
     setSelectedAttributes({});
-    setSelectedVariantId(null);
+    setSelectedVariantId(currentVariantId ?? null);
     setError(null);
 
     if (prefetchedVariants.length > 0) {
@@ -156,7 +173,7 @@ export default function VariantModal({
     return () => {
       active = false;
     };
-  }, [isOpen, productId, productImage, productName, variants]);
+  }, [currentVariantId, isOpen, productId, productImage, productName, variants]);
 
   useEffect(() => {
     if (!isOpen || resolvedBasePrice > 0 || resolvedVariants.length === 0) {
@@ -166,6 +183,22 @@ export default function VariantModal({
     const lowestPrice = resolvedVariants.reduce((min, variant) => Math.min(min, variant.price), resolvedVariants[0].price);
     setResolvedBasePrice(lowestPrice);
   }, [isOpen, resolvedBasePrice, resolvedVariants]);
+
+  useEffect(() => {
+    if (!isOpen || !currentVariantId || resolvedVariants.length === 0) {
+      return;
+    }
+
+    const matchedVariant = resolvedVariants.find((variant) => variant.id === currentVariantId);
+    if (!matchedVariant) {
+      return;
+    }
+
+    setSelectedVariantId(matchedVariant.id);
+    setSelectedAttributes(
+      Object.fromEntries(Object.entries(matchedVariant.attributes).filter(([, value]) => Boolean(value)))
+    );
+  }, [currentVariantId, isOpen, resolvedVariants]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -250,7 +283,29 @@ export default function VariantModal({
     });
   }, [attributeKeys, resolvedVariants, selectedAttributes]);
 
-  const canConfirm = Boolean(selectedVariant && selectedVariant.stock > 0 && !submitting && !loading);
+  const actionVariants = useMemo(() => {
+    if (mode === 'select') {
+      return [];
+    }
+
+    const currentId = currentVariantId ?? selectedVariantId;
+    return [...resolvedVariants].sort((left, right) => {
+      if (left.id === currentId) return -1;
+      if (right.id === currentId) return 1;
+      return 0;
+    });
+  }, [currentVariantId, mode, resolvedVariants, selectedVariantId]);
+
+  const canConfirm =
+    mode === 'select' &&
+    Boolean(selectedVariant && selectedVariant.stock > 0 && !submitting && !loading);
+
+  const modalTitle =
+    mode === 'decrease'
+      ? 'Update Variants'
+      : mode === 'increase'
+        ? 'Add Another Variant'
+        : 'Select Variant';
 
   const handleAttributeSelect = (attributeKey: string, value: string) => {
     setSelectedVariantId(null);
@@ -258,7 +313,7 @@ export default function VariantModal({
   };
 
   const handleConfirm = async () => {
-    if (!selectedVariant) {
+    if (!selectedVariant || !onConfirm) {
       return;
     }
 
@@ -277,6 +332,20 @@ export default function VariantModal({
     }
   };
 
+  const handleAdjust = async (variant: VariantOption, delta: 1 | -1) => {
+    if (!onAdjust) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await onAdjust({ variant, delta });
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (!isOpen) {
     return null;
   }
@@ -287,7 +356,7 @@ export default function VariantModal({
         <div className="flex items-start justify-between border-b border-stone-200 px-5 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">
-              Select Variant
+              {modalTitle}
             </p>
             <h2 className="mt-1 text-lg font-semibold text-stone-900">
               {resolvedProductName || productName || 'Product'}
@@ -316,7 +385,7 @@ export default function VariantModal({
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               No selectable variants are available for this product right now.
             </div>
-          ) : (
+          ) : mode === 'select' ? (
             <div className="space-y-5">
               {attributeKeys.length === 0 ? (
                 <div>
@@ -343,7 +412,7 @@ export default function VariantModal({
                           }`}
                         >
                           <div>
-                            <p className="text-sm font-semibold text-stone-900">{variant.name}</p>
+                            <p className="text-sm font-semibold text-stone-900">{toVariantLabel(variant)}</p>
                             <p className="mt-1 text-xs text-stone-500">
                               {variant.stock > 0 ? `${variant.stock} available` : 'Out of stock'}
                             </p>
@@ -409,7 +478,7 @@ export default function VariantModal({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-stone-900">
-                        {selectedVariant.name || resolvedProductName}
+                        {toVariantLabel(selectedVariant)}
                       </p>
                       <p className="mt-1 text-xs text-stone-500">
                         {selectedVariant.stock > 0 ? `${selectedVariant.stock} available` : 'Out of stock'}
@@ -422,24 +491,92 @@ export default function VariantModal({
                 </div>
               )}
             </div>
+          ) : (
+            <div className="space-y-3">
+              {actionVariants.map((variant) => {
+                const isCurrent = variant.id === (currentVariantId ?? selectedVariantId);
+                const actionDelta: 1 | -1 = isCurrent && mode === 'decrease' ? -1 : 1;
+                const disableAction = actionDelta === 1 ? variant.stock <= 0 : false;
+
+                return (
+                  <div
+                    key={variant.id}
+                    className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${
+                      isCurrent ? 'border-[#3D1F0E] bg-[#F5E9DC]' : 'border-stone-200'
+                    }`}
+                  >
+                    <div className="h-14 w-14 overflow-hidden rounded-2xl bg-stone-100">
+                      {(variant.image || resolvedProductImage) ? (
+                        <img
+                          src={variant.image || resolvedProductImage}
+                          alt={resolvedProductName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-stone-900">
+                          {toVariantLabel(variant)}
+                        </p>
+                        {isCurrent && (
+                          <span className="rounded-full bg-[#3D1F0E] px-2 py-0.5 text-[10px] font-semibold text-white">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-stone-500">
+                        {variant.stock > 0 ? `${variant.stock} available` : 'Out of stock'}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-stone-900">
+                      ৳{variant.price.toLocaleString('bn-BD')}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={disableAction || submitting}
+                      onClick={() => void handleAdjust(variant, actionDelta)}
+                      className={`flex h-10 w-10 items-center justify-center rounded-full border transition ${
+                        disableAction
+                          ? 'cursor-not-allowed border-stone-200 bg-stone-100 text-stone-400'
+                          : actionDelta === -1
+                            ? 'border-[#3D1F0E] bg-white text-[#3D1F0E] hover:bg-[#F5E9DC]'
+                            : 'border-[#3D1F0E] bg-[#3D1F0E] text-white hover:bg-[#2A1509]'
+                      }`}
+                      aria-label={actionDelta === -1 ? `Decrease ${variant.name}` : `Increase ${variant.name}`}
+                    >
+                      {submitting ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : actionDelta === -1 ? (
+                        <Minus size={14} />
+                      ) : (
+                        <Plus size={14} />
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        <div className="border-t border-stone-200 px-5 py-4">
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={!canConfirm}
-            className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-              canConfirm
-                ? 'bg-[#3D1F0E] text-[#F5E6D3] hover:bg-[#2A1509]'
-                : 'cursor-not-allowed bg-stone-200 text-stone-500'
-            }`}
-          >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
-            Confirm Selection
-          </button>
-        </div>
+        {mode === 'select' && (
+          <div className="border-t border-stone-200 px-5 py-4">
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={!canConfirm}
+              className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                canConfirm
+                  ? 'bg-[#3D1F0E] text-[#F5E6D3] hover:bg-[#2A1509]'
+                  : 'cursor-not-allowed bg-stone-200 text-stone-500'
+              }`}
+            >
+              {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
+              Confirm Selection
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
