@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Minus, Plus, ShoppingCart } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import VariantModal, { type VariantOption, type VariantSelectionPayload } from './VariantModal';
 
@@ -21,16 +21,6 @@ interface CartStepperProps {
   className?: string;
   disabled?: boolean;
 }
-
-type BoundVariantState = {
-  id: string;
-  name: string;
-  price: number;
-  stock?: number;
-  image?: string | null;
-  size?: string | null;
-  color?: string | null;
-};
 
 function clampStock(stock?: number) {
   if (typeof stock !== 'number' || Number.isNaN(stock)) {
@@ -59,88 +49,22 @@ export default function CartStepper({
   const { items, addItem, updateQuantity, removeItem } = useCart();
   const [isBusy, setIsBusy] = useState(false);
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
-  const [boundVariant, setBoundVariant] = useState<BoundVariantState | null>(null);
 
-  const productCartItems = useMemo(
+  const requiresVariantSelection = hasRequiredVariants && !variantId;
+  const cartItemId = variantId || productId;
+  const directQty = items.find((item) => item.id === cartItemId)?.quantity ?? 0;
+  const aggregateQty = useMemo(
     () =>
-      items.filter(
-        (item) => item.productId === productId || (!item.productId && item.id === productId)
-      ),
+      items
+        .filter((item) => item.productId === productId || (!item.productId && item.id === productId))
+        .reduce((sum, item) => sum + item.quantity, 0),
     [items, productId]
   );
-
-  useEffect(() => {
-    if (variantId) {
-      return;
-    }
-
-    if (boundVariant) {
-      const stillExists = items.some((item) => item.id === boundVariant.id);
-      if (!stillExists) {
-        setBoundVariant(null);
-      }
-      return;
-    }
-
-    if (productCartItems.length !== 1) {
-      return;
-    }
-
-    const [singleItem] = productCartItems;
-    if (!singleItem.variantId) {
-      return;
-    }
-
-    setBoundVariant({
-      id: singleItem.variantId,
-      name: singleItem.variantName || singleItem.name,
-      price: singleItem.price,
-      image: singleItem.variantImage || singleItem.image,
-      size: singleItem.size ?? null,
-      color: singleItem.color ?? null,
-      stock: variants?.find((variant) => variant.id === singleItem.variantId)?.stock,
-    });
-  }, [boundVariant, items, productCartItems, variantId, variants]);
-
-  const resolvedVariantId = variantId ?? boundVariant?.id ?? null;
-  const resolvedVariant = useMemo(() => {
-    if (variantId) {
-      const matchedVariant = variants?.find((variant) => variant.id === variantId);
-      return {
-        id: variantId,
-        name: matchedVariant?.name || variantName || productName,
-        price: matchedVariant?.price ?? price,
-        stock: matchedVariant?.stock,
-        image: matchedVariant?.image ?? variantImage ?? productImage,
-        size: matchedVariant?.attributes.size ?? size ?? null,
-        color: matchedVariant?.attributes.color ?? color ?? null,
-      };
-    }
-
-    return boundVariant;
-  }, [
-    boundVariant,
-    color,
-    price,
-    productImage,
-    productName,
-    size,
-    variantId,
-    variantImage,
-    variantName,
-    variants,
-  ]);
-
-  const requiresVariantSelection = hasRequiredVariants && !resolvedVariantId;
-  const cartItemId = resolvedVariantId || productId;
-  const qty = requiresVariantSelection
-    ? 0
-    : items.find((item) => item.id === cartItemId)?.quantity ?? 0;
-  const effectiveMaxStock = resolvedVariant?.stock ?? maxStock;
-  const safeMaxStock = clampStock(effectiveMaxStock);
+  const qty = requiresVariantSelection ? aggregateQty : directQty;
+  const safeMaxStock = clampStock(maxStock);
   const isOutOfStock = safeMaxStock <= 0;
-  const disablePlus =
-    disabled || isBusy || isOutOfStock || (!requiresVariantSelection && qty >= safeMaxStock);
+  const disablePlus = disabled || isBusy || isOutOfStock || (!requiresVariantSelection && qty >= safeMaxStock);
+  const disableLeft = disabled || isBusy || qty === 0;
 
   const runMutation = async (action: () => Promise<void>) => {
     setIsBusy(true);
@@ -167,20 +91,15 @@ export default function CartStepper({
           addItem({
             id: cartItemId,
             productId,
-            variantId: resolvedVariantId,
-            variantName:
-              (resolvedVariant &&
-                [resolvedVariant.size, resolvedVariant.color].filter(Boolean).join(' / ')) ||
-              variantName ||
-              resolvedVariant?.name ||
-              null,
-            size: resolvedVariant?.size ?? size ?? null,
-            color: resolvedVariant?.color ?? color ?? null,
-            variantImage: resolvedVariant?.image ?? variantImage ?? null,
+            variantId: variantId ?? null,
+            variantName: variantName ?? null,
+            size: size ?? null,
+            color: color ?? null,
+            variantImage: variantImage ?? null,
             name: productName,
-            price: resolvedVariant?.price ?? price,
+            price,
             quantity: 1,
-            image: resolvedVariant?.image || variantImage || productImage,
+            image: variantImage || productImage,
           })
         );
         return;
@@ -191,16 +110,18 @@ export default function CartStepper({
   };
 
   const handleLeft = async () => {
-    if (disabled || isBusy) {
+    if (disableLeft) {
+      return;
+    }
+
+    if (requiresVariantSelection) {
+      setIsVariantModalOpen(true);
       return;
     }
 
     await runMutation(async () => {
       if (qty === 1) {
         await Promise.resolve(removeItem(cartItemId));
-        if (!variantId) {
-          setBoundVariant(null);
-        }
         return;
       }
 
@@ -215,18 +136,6 @@ export default function CartStepper({
   }: VariantSelectionPayload) => {
     const selectedId = variant.id;
     const existingQty = items.find((item) => item.id === selectedId)?.quantity ?? 0;
-    const normalizedVariantName =
-      [variant.attributes.size, variant.attributes.color].filter(Boolean).join(' / ') || variant.name;
-
-    setBoundVariant({
-      id: variant.id,
-      name: variant.name,
-      price: variant.price,
-      stock: variant.stock,
-      image: variant.image ?? null,
-      size: variant.attributes.size ?? null,
-      color: variant.attributes.color ?? null,
-    });
 
     await runMutation(async () => {
       if (existingQty === 0) {
@@ -235,7 +144,8 @@ export default function CartStepper({
             id: selectedId,
             productId,
             variantId: variant.id,
-            variantName: normalizedVariantName,
+            variantName:
+              [variant.attributes.size, variant.attributes.color].filter(Boolean).join(' / ') || variant.name,
             size: variant.attributes.size ?? null,
             color: variant.attributes.color ?? null,
             variantImage: variant.image ?? null,
@@ -252,32 +162,6 @@ export default function CartStepper({
     });
   };
 
-  if (qty === 0) {
-    return (
-      <>
-        <button
-          type="button"
-          onClick={() => void handlePlus()}
-          disabled={disablePlus}
-          className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#3D1F0E] px-5 py-3 text-sm font-semibold text-[#F5E6D3] transition-all duration-200 hover:bg-[#2A1509] disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500 ${className}`}
-        >
-          {isBusy ? <Loader2 size={15} className="animate-spin" /> : <ShoppingCart size={15} />}
-          Add to Cart
-        </button>
-
-        <VariantModal
-          isOpen={isVariantModalOpen}
-          productId={productId}
-          productName={productName}
-          productImage={productImage}
-          variants={variants}
-          onClose={() => setIsVariantModalOpen(false)}
-          onConfirm={handleVariantConfirm}
-        />
-      </>
-    );
-  }
-
   return (
     <>
       <div
@@ -288,13 +172,15 @@ export default function CartStepper({
         <button
           type="button"
           onClick={() => void handleLeft()}
-          disabled={disabled || isBusy}
+          disabled={disableLeft}
           aria-label={
-            qty === 1 ? `Remove ${productName} from cart` : `Decrease ${productName} quantity`
+            qty <= 1
+              ? `Remove ${productName} from cart`
+              : `Decrease ${productName} quantity`
           }
           className="flex h-full w-10 flex-shrink-0 items-center justify-center rounded-l-2xl text-[#3D1F0E] transition-colors hover:bg-[#F5E9DC] disabled:cursor-not-allowed disabled:opacity-35"
         >
-          <Minus size={15} />
+          {qty <= 1 ? <Trash2 size={15} /> : <Minus size={15} />}
         </button>
 
         <span
