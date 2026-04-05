@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import VariantModal, { type VariantOption, type VariantSelectionPayload } from './VariantModal';
@@ -49,6 +49,7 @@ export default function CartStepper({
   const { items, addItem, updateQuantity, removeItem } = useCart();
   const [isBusy, setIsBusy] = useState(false);
   const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
+  const [showAddButton, setShowAddButton] = useState(false);
 
   const requiresVariantSelection = hasRequiredVariants && !variantId;
   const cartItemId = variantId || productId;
@@ -64,7 +65,13 @@ export default function CartStepper({
   const safeMaxStock = clampStock(maxStock);
   const isOutOfStock = safeMaxStock <= 0;
   const disablePlus = disabled || isBusy || isOutOfStock || (!requiresVariantSelection && qty >= safeMaxStock);
-  const disableLeft = disabled || isBusy || qty === 0;
+  const disableLeft = disabled || isBusy || (qty === 0 && showAddButton);
+
+  useEffect(() => {
+    if (qty > 0 && showAddButton) {
+      setShowAddButton(false);
+    }
+  }, [qty, showAddButton]);
 
   const runMutation = async (action: () => Promise<void>) => {
     setIsBusy(true);
@@ -79,6 +86,8 @@ export default function CartStepper({
     if (disablePlus) {
       return;
     }
+
+    setShowAddButton(false);
 
     if (requiresVariantSelection) {
       setIsVariantModalOpen(true);
@@ -114,6 +123,11 @@ export default function CartStepper({
       return;
     }
 
+    if (qty === 0) {
+      setShowAddButton(true);
+      return;
+    }
+
     if (requiresVariantSelection) {
       setIsVariantModalOpen(true);
       return;
@@ -122,6 +136,7 @@ export default function CartStepper({
     await runMutation(async () => {
       if (qty === 1) {
         await Promise.resolve(removeItem(cartItemId));
+        setShowAddButton(false);
         return;
       }
 
@@ -139,6 +154,7 @@ export default function CartStepper({
 
     await runMutation(async () => {
       if (existingQty === 0) {
+        setShowAddButton(false);
         await Promise.resolve(
           addItem({
             id: selectedId,
@@ -158,9 +174,37 @@ export default function CartStepper({
         return;
       }
 
+      setShowAddButton(false);
       await Promise.resolve(updateQuantity(selectedId, existingQty + 1));
     });
   };
+
+  if (qty === 0 && showAddButton) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => void handlePlus()}
+          disabled={disablePlus}
+          aria-label={`Add ${productName} to cart`}
+          className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#3D1F0E] px-5 py-3 text-sm font-semibold text-[#F5E6D3] transition-all duration-200 hover:bg-[#2A1509] disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500 ${className}`}
+        >
+          {isBusy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+          Add to Cart
+        </button>
+
+        <VariantModal
+          isOpen={isVariantModalOpen}
+          productId={productId}
+          productName={productName}
+          productImage={productImage}
+          variants={variants}
+          onClose={() => setIsVariantModalOpen(false)}
+          onConfirm={handleVariantConfirm}
+        />
+      </>
+    );
+  }
 
   return (
     <>
