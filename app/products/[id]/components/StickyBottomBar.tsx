@@ -70,6 +70,7 @@ export default function StickyBottomBar({
               productName={productName}
               productImage={productImage}
               price={unitPrice}
+              initialQuantity={quantity}
               maxStock={maxStock}
               variantId={variantId}
               variantName={variantName}

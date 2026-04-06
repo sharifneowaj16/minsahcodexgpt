@@ -15,6 +15,7 @@ interface CartStepperProps {
   productName: string;
   productImage: string;
   price: number;
+  initialQuantity?: number;
   maxStock?: number;
   variantId?: string | null;
   variantName?: string | null;
@@ -42,6 +43,7 @@ export default function CartStepper({
   productName,
   productImage,
   price,
+  initialQuantity = 1,
   maxStock = 99,
   variantId,
   variantName,
@@ -154,7 +156,7 @@ export default function CartStepper({
         variantImage: variant.image ?? null,
         name: productName,
         price: variant.price,
-        quantity: 1,
+        quantity: initialQuantity,
         image: variant.image || productImage,
       })
     );
@@ -227,7 +229,7 @@ export default function CartStepper({
           variantImage: variantImage ?? null,
           name: productName,
           price,
-          quantity: 1,
+          quantity: initialQuantity,
           image: variantImage || productImage,
         })
       );
@@ -258,7 +260,7 @@ export default function CartStepper({
             variantImage: variantImage ?? null,
             name: productName,
             price,
-            quantity: 1,
+            quantity: initialQuantity,
             image: variantImage || productImage,
           })
         );
