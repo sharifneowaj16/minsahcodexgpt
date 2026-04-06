@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { Product } from '@/types/product';
 import { formatPrice } from '@/lib/shopUtils';
-import CartStepper from '@/components/cart/CartStepper';
+import CardBuyNowActionRow from '@/components/cart/CardBuyNowActionRow';
 
 interface ProductCardProps {
   product: Product;
@@ -133,7 +133,7 @@ export default function ProductCard({ product, onQuickView }: ProductCardProps) 
         </div>
 
         <div className="flex gap-2">
-          <CartStepper
+          <CardBuyNowActionRow
             productId={product.id}
             productName={product.name}
             productImage={product.image}
@@ -148,7 +148,8 @@ export default function ProductCard({ product, onQuickView }: ProductCardProps) 
               image: variant.image ?? null,
               attributes: variant.option && variant.value ? { [variant.option.toLowerCase()]: variant.value } : {},
             }))}
-            className="w-full flex-1"
+            className="w-full"
+            stepperClassName="w-full flex-1"
             disabled={product.stock === 0}
           />
         </div>

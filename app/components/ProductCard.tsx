@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Package } from 'lucide-react';
 import { formatPrice } from '@/utils/currency';
-import CartStepper from '@/components/cart/CartStepper';
+import CardBuyNowActionRow from '@/components/cart/CardBuyNowActionRow';
 
 interface ProductCardProps {
   id: string;
@@ -68,12 +68,13 @@ export default function ProductCard({
             )}
           </div>
           <div className="mt-3" onClick={(e) => e.preventDefault()}>
-            <CartStepper
+            <CardBuyNowActionRow
               productId={id}
               productName={name}
               productImage={image}
               price={price}
               className="w-full"
+              stepperClassName="w-full flex-1"
             />
           </div>
         </div>

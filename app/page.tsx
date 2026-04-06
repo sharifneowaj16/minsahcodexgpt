@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Heart, ShoppingCart, Home as HomeIcon, User, ChevronRight, Flame } from 'lucide-react';
 import { formatPrice } from '@/utils/currency';
-import CartStepper from '@/components/cart/CartStepper';
+import CardBuyNowActionRow from '@/components/cart/CardBuyNowActionRow';
 
 // Helper: render a real image URL or fall back to emoji text
 function ProductImage({ src, alt }: { src: string; alt: string }) {
@@ -227,7 +227,7 @@ export default function HomePage() {
 
   const renderHomeCartAction = (product: HomeProductCardItem, className: string) => {
     return (
-      <CartStepper
+      <CardBuyNowActionRow
         productId={product.id}
         productName={product.name}
         productImage={product.image}
@@ -235,6 +235,8 @@ export default function HomePage() {
         maxStock={product.stock}
         hasRequiredVariants={product.hasVariants}
         className={className}
+        stepperClassName="min-w-0 flex-1"
+        buttonClassName="min-w-0 flex-1 px-2 text-xs"
         disabled={product.stock === 0}
       />
     );
