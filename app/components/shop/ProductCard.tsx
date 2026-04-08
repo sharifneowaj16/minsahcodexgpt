@@ -1,11 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Heart } from 'lucide-react';
 import { Product } from '@/types/product';
 import { formatPrice } from '@/lib/shopUtils';
-import CardBuyNowActionRow from '@/components/cart/CardBuyNowActionRow';
+import CartStepper from '@/components/cart/CartStepper';
+import type { BuyNowVariantOption } from '@/components/cart/BuyNowModal';
+import { ShoppingBag } from 'lucide-react';
+
+const BuyNowModal = dynamic(() => import('@/components/cart/BuyNowModal'), {
+  ssr: false,
+});
 
 interface ProductCardProps {
   product: Product;
@@ -17,41 +24,84 @@ function ProductImage({ src, alt }: { src: string; alt: string }) {
   if (isUrl) {
     return <img src={src} alt={alt} className="w-full h-full object-cover" />;
   }
-  return <span className="text-7xl md:text-8xl group-hover:scale-105 transition-transform duration-300">{src || '✨'}</span>;
+  return (
+    <span className="text-7xl md:text-8xl group-hover:scale-105 transition-transform duration-300">
+      {src || 'âœ¨'}
+    </span>
+  );
 }
 
 export default function ProductCard({ product, onQuickView }: ProductCardProps) {
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isBuyNowOpen, setIsBuyNowOpen] = useState(false);
 
   const handleWishlist = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsWishlisted(!isWishlisted);
   };
 
+  const variantOptions: BuyNowVariantOption[] | undefined = useMemo(
+    () =>
+      product.variants?.map((variant) => ({
+        id: variant.id,
+        name: variant.name,
+        price: variant.price,
+        stock: variant.stock,
+        image: variant.image ?? null,
+        attributes:
+          variant.option && variant.value
+            ? { [variant.option.toLowerCase()]: variant.value }
+            : {},
+      })),
+    [product.variants]
+  );
+
   const renderBadges = () => {
     if (product.stock === 0) {
       return (
         <div className="absolute inset-0 bg-gray-900/50 flex items-center justify-center rounded-t-xl z-10">
-          <span className="bg-gray-800 text-white px-4 py-2 rounded-full text-sm font-bold">Out of Stock</span>
+          <span className="bg-gray-800 text-white px-4 py-2 rounded-full text-sm font-bold">
+            Out of Stock
+          </span>
         </div>
       );
     }
 
     const badges = [];
     if (product.discount && product.discount > 0) {
-      badges.push(<span key="discount" className="bg-red-500 text-white px-2 py-1 rounded-md text-xs font-bold">{product.discount}% OFF</span>);
+      badges.push(
+        <span key="discount" className="bg-red-500 text-white px-2 py-1 rounded-md text-xs font-bold">
+          {product.discount}% OFF
+        </span>
+      );
     }
     if (product.isNew) {
-      badges.push(<span key="new" className="bg-green-500 text-white px-2 py-1 rounded-md text-xs font-bold">NEW</span>);
+      badges.push(
+        <span key="new" className="bg-green-500 text-white px-2 py-1 rounded-md text-xs font-bold">
+          NEW
+        </span>
+      );
     }
     if (product.isBestSeller) {
-      badges.push(<span key="bestseller" className="bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-bold">BEST SELLER</span>);
+      badges.push(
+        <span key="bestseller" className="bg-yellow-500 text-white px-2 py-1 rounded-md text-xs font-bold">
+          BEST SELLER
+        </span>
+      );
     }
     if (product.isTrending) {
-      badges.push(<span key="trending" className="bg-orange-500 text-white px-2 py-1 rounded-md text-xs font-bold">TRENDING</span>);
+      badges.push(
+        <span key="trending" className="bg-orange-500 text-white px-2 py-1 rounded-md text-xs font-bold">
+          TRENDING
+        </span>
+      );
     }
     if (product.isExclusive) {
-      badges.push(<span key="exclusive" className="bg-purple-500 text-white px-2 py-1 rounded-md text-xs font-bold">EXCLUSIVE</span>);
+      badges.push(
+        <span key="exclusive" className="bg-purple-500 text-white px-2 py-1 rounded-md text-xs font-bold">
+          EXCLUSIVE
+        </span>
+      );
     }
 
     return badges.length > 0 ? (
@@ -61,108 +111,182 @@ export default function ProductCard({ product, onQuickView }: ProductCardProps) 
 
   const renderCertificationBadges = () => {
     const certs = [];
-    if (product.isVegan) certs.push(<span key="vegan" title="Vegan" className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">V</span>);
-    if (product.isCrueltyFree) certs.push(<span key="cf" title="Cruelty-Free" className="text-xs bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded font-semibold">CF</span>);
-    if (product.isHalalCertified) certs.push(<span key="halal" title="Halal Certified" className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">H</span>);
-    if (product.isBSTIApproved) certs.push(<span key="bsti" title="BSTI Approved" className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-semibold">BSTI</span>);
+    if (product.isVegan)
+      certs.push(
+        <span key="vegan" title="Vegan" className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">
+          V
+        </span>
+      );
+    if (product.isCrueltyFree)
+      certs.push(
+        <span key="cf" title="Cruelty-Free" className="text-xs bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded font-semibold">
+          CF
+        </span>
+      );
+    if (product.isHalalCertified)
+      certs.push(
+        <span key="halal" title="Halal Certified" className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">
+          H
+        </span>
+      );
+    if (product.isBSTIApproved)
+      certs.push(
+        <span key="bsti" title="BSTI Approved" className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-semibold">
+          BSTI
+        </span>
+      );
     return certs.length > 0 ? <div className="flex items-center gap-1">{certs}</div> : null;
   };
 
+  const isDisabled = product.stock === 0;
+
   return (
-    <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden group">
-      <Link href={`/products/${product.id}`} className="block relative">
-        <div className="relative w-full aspect-square bg-minsah-accent/30 flex items-center justify-center overflow-hidden">
-          <ProductImage src={product.image} alt={product.name} />
-          {renderBadges()}
+    <>
+      <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden group">
+        {/* â”€â”€ Image â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        <Link href={`/products/${product.id}`} className="block relative">
+          <div className="relative w-full aspect-square bg-minsah-accent/30 flex items-center justify-center overflow-hidden">
+            <ProductImage src={product.image} alt={product.name} />
 
-          <button
-            onClick={handleWishlist}
-            className="absolute top-2 right-2 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-red-50 transition-colors z-10"
-            aria-label="Add to wishlist"
-          >
-            <Heart size={18} className={`${isWishlisted ? 'text-red-500 fill-red-500' : 'text-minsah-secondary'} transition-colors`} />
-          </button>
+            {renderBadges()}
 
-          {product.stock > 0 && product.stock <= 5 && (
-            <div className="absolute bottom-2 left-2 bg-orange-500 text-white px-2 py-1 rounded-md text-xs font-semibold z-10">
-              Only {product.stock} left!
-            </div>
-          )}
-        </div>
-      </Link>
+            {/* Wishlist â€” top-right */}
+            <button
+              onClick={handleWishlist}
+              className="absolute top-2 right-2 w-9 h-9 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-red-50 transition-colors z-10"
+              aria-label="Add to wishlist"
+            >
+              <Heart
+                size={18}
+                className={`${
+                  isWishlisted ? 'text-red-500 fill-red-500' : 'text-minsah-secondary'
+                } transition-colors`}
+              />
+            </button>
 
-      <div className="p-3 md:p-4">
-        <Link href={`/shop?brand=${product.brandSlug}`}>
-          <p className="text-xs text-minsah-secondary uppercase font-medium mb-1 hover:text-minsah-primary transition-colors">
-            {product.brand}
-          </p>
-        </Link>
+            {product.stock > 0 && product.stock <= 5 && (
+              <div className="absolute bottom-2 left-2 bg-orange-500 text-white px-2 py-1 rounded-md text-xs font-semibold z-10">
+                Only {product.stock} left!
+              </div>
+            )}
 
-        <Link href={`/products/${product.id}`}>
-          <h3 className="font-semibold text-sm md:text-base text-minsah-dark mb-1 line-clamp-2 hover:text-minsah-primary transition-colors min-h-[2.5rem]">
-            {product.name}
-          </h3>
-        </Link>
-
-        <div className="flex items-center gap-2 mb-2">
-          <div className="flex items-center">
-            <span className="text-yellow-400 text-sm">★</span>
-            <span className="text-xs text-minsah-dark font-medium ml-1">{product.rating.toFixed(1)}</span>
+            {/* â”€â”€ Circle cart button â€” bottom-right â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {!isDisabled && (
+              <div
+                className="absolute bottom-2.5 right-2.5 z-20"
+                onClick={(e) => e.preventDefault()}
+              >
+                <CartStepper
+                  productId={product.id}
+                  productName={product.name}
+                  productImage={product.image}
+                  price={product.price}
+                  maxStock={product.stock}
+                  hasRequiredVariants={product.hasVariants}
+                  variants={variantOptions}
+                  disabled={isDisabled}
+                  circleAdd={true}
+                />
+              </div>
+            )}
           </div>
-          <span className="text-xs text-minsah-secondary">({product.reviewCount})</span>
-          {renderCertificationBadges()}
-        </div>
+        </Link>
 
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-lg md:text-xl font-bold text-minsah-primary">
-            ৳{formatPrice(product.price)}
-          </span>
-          {product.originalPrice && product.originalPrice > product.price && (
-            <>
-              <span className="text-sm text-minsah-secondary line-through">৳{formatPrice(product.originalPrice)}</span>
-              <span className="text-xs text-green-600 font-semibold">Save ৳{formatPrice(product.originalPrice - product.price)}</span>
-            </>
+        {/* â”€â”€ Card body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        <div className="p-3 md:p-4">
+          <Link href={`/shop?brand=${product.brandSlug}`}>
+            <p className="text-xs text-minsah-secondary uppercase font-medium mb-1 hover:text-minsah-primary transition-colors">
+              {product.brand}
+            </p>
+          </Link>
+
+          <Link href={`/products/${product.id}`}>
+            <h3 className="font-semibold text-sm md:text-base text-minsah-dark mb-1 line-clamp-2 hover:text-minsah-primary transition-colors min-h-[2.5rem]">
+              {product.name}
+            </h3>
+          </Link>
+
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center">
+              <span className="text-yellow-400 text-sm">â˜…</span>
+              <span className="text-xs text-minsah-dark font-medium ml-1">
+                {product.rating.toFixed(1)}
+              </span>
+            </div>
+            <span className="text-xs text-minsah-secondary">({product.reviewCount})</span>
+            {renderCertificationBadges()}
+          </div>
+
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg md:text-xl font-bold text-minsah-primary">
+              à§³{formatPrice(product.price)}
+            </span>
+            {product.originalPrice && product.originalPrice > product.price && (
+              <>
+                <span className="text-sm text-minsah-secondary line-through">
+                  à§³{formatPrice(product.originalPrice)}
+                </span>
+                <span className="text-xs text-green-600 font-semibold">
+                  Save à§³{formatPrice(product.originalPrice - product.price)}
+                </span>
+              </>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-1 mb-3">
+            {product.isCODAvailable && (
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">COD</span>
+            )}
+            {product.isSameDayDelivery && (
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                Same Day
+              </span>
+            )}
+            {product.freeShippingEligible && (
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                Free Shipping
+              </span>
+            )}
+            {product.isEMIAvailable && (
+              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                EMI
+              </span>
+            )}
+          </div>
+
+          {/* Buy Now full-width button */}
+          <button
+            type="button"
+            onClick={() => setIsBuyNowOpen(true)}
+            disabled={isDisabled}
+            className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-[#3D1F0E] px-4 py-2.5 text-sm font-semibold text-[#F5E6D3] transition-all duration-200 hover:bg-[#2A1509] disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-500"
+          >
+            <ShoppingBag size={15} />
+            Buy Now
+          </button>
+
+          {onQuickView && (
+            <button
+              onClick={() => onQuickView(product)}
+              className="w-full mt-2 px-3 py-2 text-sm font-medium text-minsah-primary border border-minsah-primary rounded-lg hover:bg-minsah-accent transition-colors"
+            >
+              Quick View
+            </button>
           )}
         </div>
-
-        <div className="flex flex-wrap gap-1 mb-3">
-          {product.isCODAvailable && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">COD</span>}
-          {product.isSameDayDelivery && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Same Day</span>}
-          {product.freeShippingEligible && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Free Shipping</span>}
-          {product.isEMIAvailable && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">EMI</span>}
-        </div>
-
-        <div className="flex gap-2">
-          <CardBuyNowActionRow
-            productId={product.id}
-            productName={product.name}
-            productImage={product.image}
-            price={product.price}
-            maxStock={product.stock}
-            hasRequiredVariants={product.hasVariants}
-            variants={product.variants?.map((variant) => ({
-              id: variant.id,
-              name: variant.name,
-              price: variant.price,
-              stock: variant.stock,
-              image: variant.image ?? null,
-              attributes: variant.option && variant.value ? { [variant.option.toLowerCase()]: variant.value } : {},
-            }))}
-            className="w-full"
-            stepperClassName="w-full flex-1"
-            disabled={product.stock === 0}
-          />
-        </div>
-
-        {onQuickView && (
-          <button
-            onClick={() => onQuickView(product)}
-            className="w-full mt-2 px-3 py-2 text-sm font-medium text-minsah-primary border border-minsah-primary rounded-lg hover:bg-minsah-accent transition-colors"
-          >
-            Quick View
-          </button>
-        )}
       </div>
-    </div>
+
+      {isBuyNowOpen ? (
+        <BuyNowModal
+          isOpen={isBuyNowOpen}
+          productId={product.id}
+          productName={product.name}
+          productImage={product.image}
+          basePrice={product.price}
+          variants={variantOptions}
+          onClose={() => setIsBuyNowOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }

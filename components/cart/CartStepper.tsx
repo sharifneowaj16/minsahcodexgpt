@@ -1,14 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Loader2, Minus, Plus, ShoppingCart, Trash2 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
-import VariantModal, {
-  type VariantAdjustmentPayload,
-  type VariantModalMode,
-  type VariantOption,
-  type VariantSelectionPayload,
+import type {
+  VariantAdjustmentPayload,
+  VariantModalMode,
+  VariantOption,
+  VariantSelectionPayload,
 } from './VariantModal';
+
+const VariantModal = dynamic(() => import('./VariantModal'), {
+  ssr: false,
+});
 
 interface CartStepperProps {
   productId: string;
@@ -26,6 +31,10 @@ interface CartStepperProps {
   variants?: VariantOption[];
   className?: string;
   disabled?: boolean;
+  /** Renders a floating circle "+" button instead of the full "Add to Cart" text button.
+   *  Once an item is added the stepper switches to a compact pill style.
+   *  Use this when embedding inside a product card image overlay. */
+  circleAdd?: boolean;
 }
 
 type ZeroStateMode = 'button' | 'stepper';
@@ -34,7 +43,6 @@ function clampStock(stock?: number) {
   if (typeof stock !== 'number' || Number.isNaN(stock)) {
     return 99;
   }
-
   return Math.max(0, stock);
 }
 
@@ -54,6 +62,7 @@ export default function CartStepper({
   variants,
   className = '',
   disabled = false,
+  circleAdd = false,
 }: CartStepperProps) {
   const { items, addItem, updateQuantity, removeItem } = useCart();
   const [isBusy, setIsBusy] = useState(false);
@@ -97,10 +106,7 @@ export default function CartStepper({
 
   const currentVariantId = variantId ?? boundVariantId;
   const currentVariant = useMemo(() => {
-    if (!currentVariantId) {
-      return null;
-    }
-
+    if (!currentVariantId) return null;
     return variants?.find((variant) => variant.id === currentVariantId) ?? null;
   }, [currentVariantId, variants]);
 
@@ -196,9 +202,7 @@ export default function CartStepper({
   };
 
   const handleAddToCart = async () => {
-    if (disabled || isBusy || isOutOfStock) {
-      return;
-    }
+    if (disabled || isBusy || isOutOfStock) return;
 
     if (isVariantProduct && !currentVariantId) {
       openModal('select');
@@ -237,9 +241,7 @@ export default function CartStepper({
   };
 
   const handleIncrease = async () => {
-    if (disabled || isBusy || isOutOfStock) {
-      return;
-    }
+    if (disabled || isBusy || isOutOfStock) return;
 
     if (isVariantProduct) {
       openModal(qty === 0 ? 'select' : 'increase');
@@ -272,9 +274,7 @@ export default function CartStepper({
   };
 
   const handleDecrease = async () => {
-    if (disabled || isBusy) {
-      return;
-    }
+    if (disabled || isBusy) return;
 
     if (qty === 0) {
       await runMutation(async () => {
@@ -311,7 +311,97 @@ export default function CartStepper({
   const showZeroStepper = qty === 0 && zeroStateMode === 'stepper';
   const plusDisabled =
     disabled || isBusy || isOutOfStock || (!isVariantProduct && qty >= safeMaxStock);
+  const variantModal = isVariantModalOpen ? (
+    <VariantModal
+      isOpen={isVariantModalOpen}
+      mode={modalMode}
+      productId={productId}
+      productName={productName}
+      productImage={productImage}
+      variants={variants}
+      currentVariantId={currentVariantId}
+      onClose={() => setIsVariantModalOpen(false)}
+      onConfirm={handleSelectConfirm}
+      onAdjust={handleAdjustVariant}
+    />
+  ) : null;
 
+  // â”€â”€â”€ CIRCLE-ADD MODE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  if (circleAdd) {
+    // Zero state â€” floating circle "+" button
+    if (showAddButton) {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => void handleAddToCart()}
+            disabled={disabled || isBusy || isOutOfStock}
+            aria-label={`Add ${productName} to cart`}
+            className={`group relative flex h-10 w-10 items-center justify-center rounded-full bg-[#E8466A] shadow-[0_4px_14px_rgba(232,70,106,0.45)] transition-all duration-200 hover:scale-110 hover:bg-[#D63258] active:scale-95 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:shadow-none ${className}`}
+          >
+            {isBusy ? (
+              <Loader2 size={17} className="animate-spin text-white" />
+            ) : (
+              <Plus size={19} strokeWidth={2.5} className="text-white" />
+            )}
+            {/* ripple ring */}
+            <span className="absolute inset-0 rounded-full bg-[#E8466A] opacity-0 transition-opacity group-hover:animate-ping group-hover:opacity-30" />
+          </button>
+
+          {variantModal}
+        </>
+      );
+    }
+
+    // Active / zero-stepper state â€” compact pill stepper
+    return (
+      <>
+        <div
+          className={`inline-flex h-10 items-center overflow-hidden rounded-full border-2 border-[#E8466A] bg-white shadow-[0_4px_14px_rgba(232,70,106,0.30)] ${className}`}
+          role="group"
+          aria-label={`${productName} cart quantity`}
+        >
+          <button
+            type="button"
+            onClick={() => void handleDecrease()}
+            disabled={disabled || isBusy}
+            aria-label={
+              showZeroStepper
+                ? `Remove ${productName} from cart`
+                : qty <= 1
+                  ? `Decrease quantity to zero`
+                  : `Decrease quantity`
+            }
+            className="flex h-full w-9 flex-shrink-0 items-center justify-center text-[#E8466A] transition-colors hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {showZeroStepper ? <Trash2 size={13} /> : <Minus size={13} />}
+          </button>
+
+          <span
+            className="flex min-w-[1.5rem] flex-1 items-center justify-center px-1 text-sm font-bold text-[#1A0D06]"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {isBusy ? <Loader2 size={13} className="animate-spin" /> : qty}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => void handleIncrease()}
+            disabled={plusDisabled}
+            aria-label={`Increase ${productName} quantity`}
+            className="flex h-full w-9 flex-shrink-0 items-center justify-center text-[#E8466A] transition-colors hover:bg-pink-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus size={13} />
+          </button>
+        </div>
+
+        {variantModal}
+      </>
+    );
+  }
+
+  // â”€â”€â”€ DEFAULT MODE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <>
       {showAddButton ? (
@@ -367,18 +457,7 @@ export default function CartStepper({
         </div>
       )}
 
-      <VariantModal
-        isOpen={isVariantModalOpen}
-        mode={modalMode}
-        productId={productId}
-        productName={productName}
-        productImage={productImage}
-        variants={variants}
-        currentVariantId={currentVariantId}
-        onClose={() => setIsVariantModalOpen(false)}
-        onConfirm={handleSelectConfirm}
-        onAdjust={handleAdjustVariant}
-      />
+      {variantModal}
     </>
   );
 }
