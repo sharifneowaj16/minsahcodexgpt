@@ -285,7 +285,7 @@ export default function HomePage() {
     [products]
   );
 
-  const fallbackCategories = useMemo(
+  const fallbackCategories = useMemo<HomeCategory[]>(
     () =>
       [...new Set(activeProducts.map((product) => product.category).filter(Boolean))]
         .slice(0, 6)
@@ -294,6 +294,7 @@ export default function HomePage() {
           name,
           slug: toSlug(name),
           href: `/shop?category=${encodeURIComponent(name)}`,
+          icon: undefined,
           productCount: activeProducts.filter((product) => product.category === name).length,
         })),
     [activeProducts]
@@ -675,6 +676,7 @@ export default function HomePage() {
     </div>
   );
 }
+
 
 
 // 'use client';
