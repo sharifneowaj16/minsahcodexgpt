@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MarketingHub from '@/app/components/admin/MarketingHub';
 import SocialMediaInbox from '@/app/components/admin/SocialMediaInbox';
@@ -98,7 +98,12 @@ export function AdminMarketingClient({ initialTab }: AdminMarketingClientProps) 
           </div>
         )}
         {activeTab === 'inbox' && (
-          <SocialMediaInbox className="h-full" />
+          <SocialMediaInbox
+            className="h-full"
+            initialPlatform="facebook"
+            title="Facebook Inbox"
+            description="Manage Facebook messages and comment replies from one place"
+          />
         )}
         {activeTab === 'whatsapp' && (
           <WhatsAppIntegration />

@@ -1,5 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { normalizeFacebookAttachments } from '@/lib/facebook/inboxSync';
+import { persistSocialMessage } from '@/lib/social/socialMessageIngest';
+
+interface FacebookMessagingEvent {
+  message?: {
+    text?: string;
+    mid?: string;
+    attachments?: Array<{
+      id?: string;
+      mime_type?: string;
+      name?: string;
+      file_url?: string;
+      image_data?: {
+        url?: string;
+        preview_url?: string;
+      };
+      video_data?: {
+        url?: string;
+        preview_url?: string;
+      };
+      audio_data?: {
+        url?: string;
+      };
+      payload?: {
+        url?: string;
+      };
+      type?: string;
+    }>;
+  };
+  sender?: {
+    id?: string;
+  };
+  timestamp?: number;
+}
+
+interface SocialCommentPayload {
+  id?: string;
+  message?: string;
+  post_id?: string;
+  from?: {
+    id?: string;
+    name?: string;
+  };
+  created_time?: string;
+}
+
+interface WhatsAppMessagePayload {
+  id?: string;
+  from?: string;
+  text?: {
+    body?: string;
+  };
+}
+
+interface YouTubeCommentPayload {
+  id?: string;
+  content?: string;
+  published?: string;
+  author?: {
+    yt_channelId?: string;
+    name?: string;
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,70 +126,80 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 }
 
-async function processMessage(platform: string, event: any) {
-  if (!event.message?.text) return;
-  await prisma.socialMessage.create({
-    data: {
-      platform,
-      type: 'message',
-      externalId: event.message.mid,
-      senderId: event.sender.id,
-      content: event.message.text,
-      isIncoming: true,
-      isRead: false,
-      timestamp: new Date(event.timestamp),
-    },
+async function processMessage(platform: string, event: FacebookMessagingEvent) {
+  if (!event.sender?.id || (!event.message?.text && !event.message?.attachments?.length)) return;
+  const attachments = normalizeFacebookAttachments(event.message?.attachments);
+  const content =
+    event.message?.text ||
+    `[${attachments.map((attachment) => attachment.type).join(', ') || 'attachment'}]`;
+
+  await persistSocialMessage({
+    platform,
+    type: 'message',
+    externalId: event.message?.mid ?? null,
+    conversationId: `${platform}:${event.sender.id}`,
+    senderId: event.sender.id,
+    senderName: event.sender.id,
+    content,
+    rawPayload: event,
+    isIncoming: true,
+    isRead: false,
+    timestamp: new Date(event.timestamp ?? Date.now()),
+    attachments,
+    attachmentAccessToken: process.env.FACEBOOK_ACCESS_TOKEN,
   });
 }
 
-async function processComment(platform: string, comment: any) {
+async function processComment(platform: string, comment: SocialCommentPayload) {
   if (!comment.message) return;
-  await prisma.socialMessage.create({
-    data: {
-      platform,
-      type: 'comment',
-      externalId: comment.id,
-      postId: comment.post_id,
-      senderId: comment.from?.id,
-      senderName: comment.from?.name,
-      content: comment.message,
-      isIncoming: true,
-      isRead: false,
-      timestamp: new Date(comment.created_time),
-    },
+  await persistSocialMessage({
+    platform,
+    type: 'comment',
+    externalId: comment.id,
+    conversationId: comment.post_id
+      ? `${platform}:post:${comment.post_id}:${comment.from?.id ?? comment.id}`
+      : `${platform}:comment:${comment.id}`,
+    postId: comment.post_id,
+    senderId: comment.from?.id,
+    senderName: comment.from?.name,
+    content: comment.message,
+    rawPayload: comment,
+    isIncoming: true,
+    isRead: false,
+    timestamp: new Date(comment.created_time ?? Date.now()),
   });
 }
 
-async function processWhatsAppMessage(message: any) {
-  if (!message.text?.body) return;
-  await prisma.socialMessage.create({
-    data: {
-      platform: 'whatsapp',
-      type: 'message',
-      externalId: message.id,
-      senderId: message.from,
-      content: message.text.body,
-      isIncoming: true,
-      isRead: false,
-      timestamp: new Date(),
-    },
+async function processWhatsAppMessage(message: WhatsAppMessagePayload) {
+  if (!message.text?.body || !message.from) return;
+  await persistSocialMessage({
+    platform: 'whatsapp',
+    type: 'message',
+    externalId: message.id,
+    conversationId: `whatsapp:${message.from}`,
+    senderId: message.from,
+    content: message.text.body,
+    rawPayload: message,
+    isIncoming: true,
+    isRead: false,
+    timestamp: new Date(),
   });
 }
 
-async function processYouTubeComment(entry: any) {
+async function processYouTubeComment(entry: YouTubeCommentPayload) {
   if (!entry.content) return;
-  await prisma.socialMessage.create({
-    data: {
-      platform: 'youtube',
-      type: 'comment',
-      externalId: entry.id,
-      senderId: entry.author?.yt_channelId,
-      senderName: entry.author?.name,
-      content: entry.content,
-      isIncoming: true,
-      isRead: false,
-      timestamp: new Date(entry.published),
-    },
+  await persistSocialMessage({
+    platform: 'youtube',
+    type: 'comment',
+    externalId: entry.id,
+    conversationId: `youtube:${entry.author?.yt_channelId ?? entry.id}`,
+    senderId: entry.author?.yt_channelId,
+    senderName: entry.author?.name,
+    content: entry.content,
+    rawPayload: entry,
+    isIncoming: true,
+    isRead: false,
+    timestamp: new Date(entry.published ?? Date.now()),
   });
 }
 // ﻿import { NextRequest, NextResponse } from 'next/server';

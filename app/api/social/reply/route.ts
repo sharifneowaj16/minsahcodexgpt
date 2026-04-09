@@ -1,11 +1,18 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-// API endpoint for replying to social media messages/comments
+interface ReplyRequestBody {
+  platform?: 'facebook' | 'instagram' | 'whatsapp' | 'youtube';
+  messageId?: string;
+  messageType?: string;
+  conversationId?: string;
+  recipientId?: string;
+  text?: string;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { platform, messageId, conversationId, text, media } = body;
+    const body = (await request.json()) as ReplyRequestBody;
+    const { platform, messageId, messageType, conversationId, recipientId, text } = body;
 
     if (!platform || !text) {
       return NextResponse.json(
@@ -14,17 +21,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Send reply based on platform
     let result;
     switch (platform) {
       case 'facebook':
-        result = await sendFacebookReply(messageId, text, media);
+        result = await sendFacebookReply({
+          messageId,
+          messageType,
+          recipientId,
+          text,
+        });
         break;
       case 'instagram':
-        result = await sendInstagramReply(messageId, text, media);
+        result = await sendInstagramReply(messageId, text);
         break;
       case 'whatsapp':
-        result = await sendWhatsAppReply(conversationId, text, media);
+        result = await sendWhatsAppReply(conversationId, text);
         break;
       case 'youtube':
         result = await sendYouTubeReply(messageId, text);
@@ -36,17 +47,6 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // Save reply to database
-    // await db.socialMessages.create({
-    //   platform,
-    //   type: 'message',
-    //   conversationId,
-    //   content: text,
-    //   isIncoming: false,
-    //   timestamp: new Date(),
-    //   status: 'sent',
-    // });
-
     return NextResponse.json({ success: true, result });
   } catch (error) {
     console.error('Reply error:', error);
@@ -57,26 +57,61 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function sendFacebookReply(messageId: string, text: string, media?: any[]) {
-  // Use Facebook Graph API to send reply
+async function sendFacebookReply({
+  messageId,
+  messageType,
+  recipientId,
+  text,
+}: {
+  messageId?: string;
+  messageType?: string;
+  recipientId?: string;
+  text: string;
+}) {
   const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
-  
-  // For comments:
-  // POST https://graph.facebook.com/v18.0/{comment-id}/comments
-  
-  // For messages:
-  // POST https://graph.facebook.com/v18.0/me/messages
-  
+
+  if (!accessToken) {
+    throw new Error('Missing FACEBOOK_ACCESS_TOKEN');
+  }
+
+  if (messageType === 'comment') {
+    if (!messageId) {
+      throw new Error('Facebook comment reply requires messageId');
+    }
+
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${messageId}/comments`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: text,
+          access_token: accessToken,
+        }),
+      }
+    );
+
+    return await response.json();
+  }
+
+  if (!recipientId) {
+    throw new Error('Facebook message reply requires recipientId');
+  }
+
   const response = await fetch(
-    `https://graph.facebook.com/v18.0/${messageId}/comments`,
+    'https://graph.facebook.com/v18.0/me/messages',
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        message: text,
-        access_token: accessToken,
+        recipient: { id: recipientId },
+        messaging_type: 'RESPONSE',
+        message: { text },
       }),
     }
   );
@@ -84,12 +119,13 @@ async function sendFacebookReply(messageId: string, text: string, media?: any[])
   return await response.json();
 }
 
-async function sendInstagramReply(messageId: string, text: string, media?: any[]) {
-  // Use Instagram Graph API to send reply
+async function sendInstagramReply(messageId: string | undefined, text: string) {
   const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
-  
-  // POST https://graph.facebook.com/v18.0/{comment-id}/replies
-  
+
+  if (!messageId) {
+    throw new Error('Instagram reply requires messageId');
+  }
+
   const response = await fetch(
     `https://graph.facebook.com/v18.0/${messageId}/replies`,
     {
@@ -107,20 +143,21 @@ async function sendInstagramReply(messageId: string, text: string, media?: any[]
   return await response.json();
 }
 
-async function sendWhatsAppReply(conversationId: string, text: string, media?: any[]) {
-  // Use WhatsApp Business API to send reply
+async function sendWhatsAppReply(conversationId: string | undefined, text: string) {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  
-  // POST https://graph.facebook.com/v18.0/{phone-number-id}/messages
-  
+
+  if (!conversationId) {
+    throw new Error('WhatsApp reply requires conversationId');
+  }
+
   const response = await fetch(
     `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
@@ -136,19 +173,20 @@ async function sendWhatsAppReply(conversationId: string, text: string, media?: a
   return await response.json();
 }
 
-async function sendYouTubeReply(commentId: string, text: string) {
-  // Use YouTube Data API to send reply
+async function sendYouTubeReply(commentId: string | undefined, text: string) {
   const accessToken = process.env.YOUTUBE_ACCESS_TOKEN;
-  
-  // POST https://www.googleapis.com/youtube/v3/commentThreads
-  
+
+  if (!commentId) {
+    throw new Error('YouTube reply requires commentId');
+  }
+
   const response = await fetch(
     'https://www.googleapis.com/youtube/v3/comments',
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         snippet: {
@@ -161,4 +199,3 @@ async function sendYouTubeReply(commentId: string, text: string) {
 
   return await response.json();
 }
-

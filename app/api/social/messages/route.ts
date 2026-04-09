@@ -7,23 +7,33 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl;
     const platform = searchParams.get('platform'); // optional filter
     const unreadOnly = searchParams.get('unread') === 'true';
+    const baseWhere = {
+      ...(platform && { platform }),
+      ...(unreadOnly && { isRead: false }),
+      isIncoming: true,
+    };
 
     const messages = await prisma.socialMessage.findMany({
-      where: {
-        ...(platform && { platform }),
-        ...(unreadOnly && { isRead: false }),
-        isIncoming: true,
-      },
+      where: baseWhere,
       orderBy: { timestamp: 'desc' },
       take: 50,
+      include: {
+        attachments: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
 
     const unreadCount = await prisma.socialMessage.count({
-      where: { isRead: false, isIncoming: true },
+      where: {
+        ...(platform && { platform }),
+        isRead: false,
+        isIncoming: true,
+      },
     });
 
     return NextResponse.json({ messages, unreadCount });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
   }
 }
@@ -31,11 +41,25 @@ export async function GET(request: NextRequest) {
 // PATCH - Mark as read
 export async function PATCH(request: NextRequest) {
   try {
-    const { id, markAll } = await request.json();
+    const { id, conversationId, platform, markAll } = await request.json();
 
     if (markAll) {
       await prisma.socialMessage.updateMany({
-        where: { isRead: false },
+        where: {
+          ...(platform && { platform }),
+          isRead: false,
+          isIncoming: true,
+        },
+        data: { isRead: true },
+      });
+    } else if (conversationId) {
+      await prisma.socialMessage.updateMany({
+        where: {
+          conversationId,
+          ...(platform && { platform }),
+          isRead: false,
+          isIncoming: true,
+        },
         data: { isRead: true },
       });
     } else {
@@ -46,7 +70,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
   }
 }

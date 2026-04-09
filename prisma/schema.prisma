@@ -850,15 +850,42 @@ model SocialMessage {
   senderName     String?
   senderAvatar   String?
   content        String   @db.Text
+  rawPayload     Json?
   isIncoming     Boolean  @default(true)
   isRead         Boolean  @default(false)
   timestamp      DateTime @default(now())
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  attachments    SocialMessageAttachment[]
 
   @@index([platform])
   @@index([isRead])
   @@index([timestamp])
+  @@unique([platform, externalId])
+}
+
+model SocialMessageAttachment {
+  id           String   @id @default(cuid())
+  messageId    String
+  externalId   String?
+  type         String
+  mimeType     String?
+  fileName     String?
+  fileSize     Int?
+  durationMs   Int?
+  externalUrl  String?
+  storageKey   String?
+  storageUrl   String?
+  thumbnailUrl String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  message SocialMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([type])
+  @@unique([messageId, externalId])
 }
 
 // ==========================================

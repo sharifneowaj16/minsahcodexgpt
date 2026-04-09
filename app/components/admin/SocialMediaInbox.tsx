@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fixEncoding } from '@/lib/fixEncoding';
 import {
   MessageCircle,
@@ -9,6 +9,10 @@ import {
   UserCircle,
   Bell,
   Search,
+  RefreshCw,
+  Video as VideoIcon,
+  FileAudio,
+  FileText,
 } from 'lucide-react';
 
 export interface SocialMessage {
@@ -26,9 +30,11 @@ export interface SocialMessage {
   content: {
     text: string;
     media?: Array<{
-      type: 'image' | 'video' | 'document';
+      type: 'image' | 'video' | 'audio' | 'document' | 'file';
       url: string;
       thumbnail?: string;
+      fileName?: string;
+      mimeType?: string;
     }>;
   };
   post?: {
@@ -44,55 +50,140 @@ export interface SocialMessage {
 
 interface SocialMediaInboxProps {
   className?: string;
+  initialPlatform?: 'all' | SocialMessage['platform'];
+  title?: string;
+  description?: string;
 }
 
-export default function SocialMediaInbox({ className = '' }: SocialMediaInboxProps) {
+interface SocialMessageApiRecord {
+  id: string;
+  platform: SocialMessage['platform'];
+  type: SocialMessage['type'];
+  conversationId?: string | null;
+  senderId?: string | null;
+  senderName?: string | null;
+  senderAvatar?: string | null;
+  content: string;
+  isRead: boolean;
+  timestamp: string;
+  isIncoming: boolean;
+  attachments?: Array<{
+    id: string;
+    type: string;
+    mimeType?: string | null;
+    fileName?: string | null;
+    storageUrl?: string | null;
+    externalUrl?: string | null;
+    thumbnailUrl?: string | null;
+  }>;
+}
+
+export default function SocialMediaInbox({
+  className = '',
+  initialPlatform = 'all',
+  title = 'Social Media Inbox',
+  description = 'Manage all social media messages and comments',
+}: SocialMediaInboxProps) {
   const [messages, setMessages] = useState<SocialMessage[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
-  const [filterPlatform, setFilterPlatform] = useState<string>('all');
+  const [filterPlatform, setFilterPlatform] = useState<string>(initialPlatform);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [syncingFacebook, setSyncingFacebook] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadMessages();
-    const interval = setInterval(() => {
-      loadMessages();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/social/messages');
-      const data = await res.json();
-      const mapped = data.messages.map((m: any) => ({
+      const params = new URLSearchParams();
+      if (filterPlatform !== 'all') {
+        params.set('platform', filterPlatform);
+      }
+      const query = params.toString();
+      const res = await fetch(`/api/social/messages${query ? `?${query}` : ''}`);
+      const data = (await res.json()) as {
+        messages: SocialMessageApiRecord[];
+        unreadCount: number;
+      };
+      const mapped = data.messages.map((m) => ({
         id: m.id,
         platform: m.platform,
         type: m.type,
-        conversationId: m.conversationId || m.id,
+        conversationId: m.conversationId || (m.senderId ? `${m.platform}:${m.senderId}` : m.id),
         sender: {
           id: m.senderId || 'unknown',
           name: m.senderName || 'Unknown',
           avatar: m.senderAvatar,
         },
-        content: { text: m.content },
+        content: {
+          text: m.content,
+          media: (m.attachments ?? [])
+            .map((attachment) => ({
+              type:
+                attachment.type === 'image' || attachment.type === 'video' || attachment.type === 'audio'
+                  ? attachment.type
+                  : 'file',
+              url: attachment.storageUrl || attachment.externalUrl || '',
+              thumbnail: attachment.thumbnailUrl || undefined,
+              fileName: attachment.fileName || undefined,
+              mimeType: attachment.mimeType || undefined,
+            }))
+            .filter((attachment) => Boolean(attachment.url)),
+        },
         status: m.isRead ? 'read' : 'unread',
         timestamp: m.timestamp,
         isIncoming: m.isIncoming,
       }));
       setMessages(mapped);
       setUnreadCount(data.unreadCount);
-      if (mapped.length > 0 && !selectedConversation) {
-        setSelectedConversation(mapped[0].conversationId);
-      }
     } catch (error) {
       console.error('Error loading messages:', error);
     } finally {
       setLoading(false);
+    }
+  }, [filterPlatform]);
+
+  useEffect(() => {
+    void loadMessages();
+    const interval = setInterval(() => {
+      void loadMessages();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [loadMessages]);
+
+  const handleFacebookSync = async () => {
+    setSyncingFacebook(true);
+    setSyncMessage(null);
+
+    try {
+      const response = await fetch('/api/admin/social/facebook/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      const data = (await response.json()) as {
+        error?: string;
+        processedConversations?: number;
+        processedMessages?: number;
+        processedAttachments?: number;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Facebook sync failed');
+      }
+
+      setSyncMessage(
+        `Synced ${data.processedMessages ?? 0} messages and ${data.processedAttachments ?? 0} attachments`
+      );
+      await loadMessages();
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : 'Facebook sync failed');
+    } finally {
+      setSyncingFacebook(false);
     }
   };
 
@@ -109,7 +200,9 @@ export default function SocialMediaInbox({ className = '' }: SocialMediaInboxPro
         body: JSON.stringify({
           platform: originalMessage.platform,
           messageId: originalMessage.id,
+          messageType: originalMessage.type,
           conversationId,
+          recipientId: originalMessage.sender.id,
           text: replyText,
         }),
       });
@@ -139,18 +232,30 @@ export default function SocialMediaInbox({ className = '' }: SocialMediaInboxPro
     }
   };
 
-  const markAsRead = async (messageId: string) => {
+  const markAsRead = async (messageId: string, conversationId?: string) => {
+    const markedUnreadCount = messages.filter(
+      (msg) =>
+        msg.status === 'unread' &&
+        (msg.id === messageId || (conversationId && msg.conversationId === conversationId))
+    ).length;
+
     await fetch('/api/social/messages', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: messageId }),
+      body: JSON.stringify({
+        id: messageId,
+        conversationId,
+        platform: filterPlatform !== 'all' ? filterPlatform : undefined,
+      }),
     });
     setMessages(prev =>
       prev.map(msg =>
-        msg.id === messageId ? { ...msg, status: 'read' as const } : msg
+        msg.id === messageId || (conversationId && msg.conversationId === conversationId)
+          ? { ...msg, status: 'read' as const }
+          : msg
       )
     );
-    setUnreadCount(prev => Math.max(0, prev - 1));
+    setUnreadCount(prev => Math.max(0, prev - markedUnreadCount));
   };
 
   const getPlatformIcon = (platform: string) => {
@@ -181,23 +286,108 @@ export default function SocialMediaInbox({ className = '' }: SocialMediaInboxPro
     }
   };
 
-  const filteredMessages = messages.filter(msg => {
-    if (filterPlatform !== 'all' && msg.platform !== filterPlatform) return false;
-    if (filterStatus !== 'all' && msg.status !== filterStatus) return false;
-    if (
-      searchQuery &&
-      !msg.content.text.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !msg.sender.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-      return false;
-    return true;
-  });
+  const renderMediaAttachment = (
+    media: NonNullable<SocialMessage['content']['media']>[number],
+    key: string
+  ) => {
+    if (media.type === 'image') {
+      return (
+        <a key={key} href={media.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-gray-200">
+          <img
+            src={media.thumbnail || media.url}
+            alt={media.fileName || 'Image attachment'}
+            className="h-40 w-full object-cover"
+          />
+        </a>
+      );
+    }
 
-  const conversationMessages = selectedConversation
-    ? filteredMessages.filter(m => m.conversationId === selectedConversation)
-    : [];
+    if (media.type === 'video') {
+      return (
+        <a key={key} href={media.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+          <VideoIcon className="h-4 w-4 text-purple-600" />
+          <span className="truncate">{media.fileName || 'Video attachment'}</span>
+        </a>
+      );
+    }
 
-  const selectedMessage = conversationMessages[0];
+    if (media.type === 'audio') {
+      return (
+        <a key={key} href={media.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+          <FileAudio className="h-4 w-4 text-emerald-600" />
+          <span className="truncate">{media.fileName || 'Audio attachment'}</span>
+        </a>
+      );
+    }
+
+    return (
+      <a key={key} href={media.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+        <FileText className="h-4 w-4 text-gray-500" />
+        <span className="truncate">{media.fileName || media.mimeType || 'File attachment'}</span>
+      </a>
+    );
+  };
+
+  const filteredMessages = useMemo(
+    () =>
+      messages.filter((msg) => {
+        if (filterPlatform !== 'all' && msg.platform !== filterPlatform) return false;
+        if (filterStatus !== 'all' && msg.status !== filterStatus) return false;
+        if (
+          searchQuery &&
+          !msg.content.text.toLowerCase().includes(searchQuery.toLowerCase()) &&
+          !msg.sender.name.toLowerCase().includes(searchQuery.toLowerCase())
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [filterPlatform, filterStatus, messages, searchQuery]
+  );
+
+  const conversationList = useMemo(() => {
+    const grouped = new Map<string, SocialMessage>();
+    for (const message of filteredMessages) {
+      const key = message.conversationId || message.id;
+      const existing = grouped.get(key);
+      if (!existing || new Date(message.timestamp) > new Date(existing.timestamp)) {
+        grouped.set(key, message);
+      }
+    }
+
+    return Array.from(grouped.values()).sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }, [filteredMessages]);
+
+  useEffect(() => {
+    if (conversationList.length === 0) {
+      if (selectedConversation) setSelectedConversation(null);
+      return;
+    }
+
+    const hasSelection = conversationList.some(
+      (message) => message.conversationId === selectedConversation
+    );
+
+    if (!hasSelection) {
+      setSelectedConversation(conversationList[0].conversationId);
+    }
+  }, [conversationList, selectedConversation]);
+
+  const conversationMessages = useMemo(
+    () =>
+      selectedConversation
+        ? filteredMessages
+            .filter((message) => message.conversationId === selectedConversation)
+            .sort(
+              (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            )
+        : [],
+    [filteredMessages, selectedConversation]
+  );
+
+  const selectedMessage = conversationMessages[conversationMessages.length - 1];
 
   if (loading) {
     return (
@@ -219,10 +409,24 @@ export default function SocialMediaInbox({ className = '' }: SocialMediaInboxPro
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Social Media Inbox</h1>
-            <p className="text-gray-600 text-sm">Manage all social media messages and comments</p>
+            <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+            <p className="text-gray-600 text-sm">{description}</p>
+            {syncMessage && (
+              <p className="mt-2 text-sm text-gray-600">{syncMessage}</p>
+            )}
           </div>
           <div className="flex items-center gap-3">
+            {filterPlatform === 'facebook' && (
+              <button
+                type="button"
+                onClick={() => void handleFacebookSync()}
+                disabled={syncingFacebook}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${syncingFacebook ? 'animate-spin' : ''}`} />
+                Sync Facebook
+              </button>
+            )}
             {unreadCount > 0 && (
               <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
                 <Bell className="w-4 h-4" />
@@ -271,19 +475,19 @@ export default function SocialMediaInbox({ className = '' }: SocialMediaInboxPro
       <div className="flex-1 flex overflow-hidden">
         {/* Conversations List */}
         <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
-          {filteredMessages.length === 0 ? (
+          {conversationList.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-400">
               <MessageCircle className="w-12 h-12 mb-3" />
               <p className="text-sm">No messages yet</p>
             </div>
           ) : (
             <div className="p-4 space-y-2">
-              {filteredMessages.map((message) => (
+              {conversationList.map((message) => (
                 <div
-                  key={message.id}
+                  key={message.conversationId}
                   onClick={() => {
                     setSelectedConversation(message.conversationId);
-                    markAsRead(message.id);
+                    void markAsRead(message.id, message.conversationId);
                   }}
                   className={`p-4 rounded-lg cursor-pointer transition-colors ${
                     selectedConversation === message.conversationId
@@ -377,28 +581,41 @@ export default function SocialMediaInbox({ className = '' }: SocialMediaInboxPro
                   </div>
                 )}
 
-                {/* Incoming Message */}
-                <div className="flex items-start gap-3">
-                  {selectedMessage.sender.avatar ? (
-                    <img
-                      src={selectedMessage.sender.avatar}
-                      alt={selectedMessage.sender.name}
-                      className="w-8 h-8 rounded-full"
-                    />
-                  ) : (
-                    <UserCircle className="w-8 h-8 text-gray-400" />
-                  )}
-                  <div className="flex-1">
-                    <div className="bg-gray-100 rounded-lg p-4">
-                      <p className="text-sm text-gray-900">
-                        {fixEncoding(selectedMessage.content.text)}
+                {conversationMessages.map((message) => (
+                  <div key={message.id} className="flex items-start gap-3">
+                    {message.sender.avatar ? (
+                      <img
+                        src={message.sender.avatar}
+                        alt={message.sender.name}
+                        className="w-8 h-8 rounded-full"
+                      />
+                    ) : (
+                      <UserCircle className="w-8 h-8 text-gray-400" />
+                    )}
+                    <div className="flex-1">
+                      <div className="bg-gray-100 rounded-lg p-4">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium capitalize text-gray-600">
+                            {message.type}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-900">
+                          {fixEncoding(message.content.text)}
+                        </p>
+                        {message.content.media && message.content.media.length > 0 && (
+                          <div className="mt-3 grid gap-2">
+                            {message.content.media.map((media, index) =>
+                              renderMediaAttachment(media, `${message.id}-${index}`)
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(message.timestamp).toLocaleString()}
                       </p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(selectedMessage.timestamp).toLocaleString()}
-                    </p>
                   </div>
-                </div>
+                ))}
 
                 {/* Replies */}
                 {selectedMessage.replies?.map((reply) => (
