@@ -78,6 +78,16 @@ interface SocialMessageApiRecord {
   }>;
 }
 
+type SocialMediaContentItem = NonNullable<SocialMessage['content']['media']>[number];
+
+function normalizeMediaType(type: string): SocialMediaContentItem['type'] {
+  if (type === 'image' || type === 'video' || type === 'audio' || type === 'document') {
+    return type;
+  }
+
+  return 'file';
+}
+
 export default function SocialMediaInbox({
   className = '',
   initialPlatform = 'all',
@@ -121,11 +131,8 @@ export default function SocialMediaInbox({
         content: {
           text: m.content,
           media: (m.attachments ?? [])
-            .map((attachment) => ({
-              type:
-                attachment.type === 'image' || attachment.type === 'video' || attachment.type === 'audio'
-                  ? attachment.type
-                  : 'file',
+            .map((attachment): SocialMediaContentItem => ({
+              type: normalizeMediaType(attachment.type),
               url: attachment.storageUrl || attachment.externalUrl || '',
               thumbnail: attachment.thumbnailUrl || undefined,
               fileName: attachment.fileName || undefined,
