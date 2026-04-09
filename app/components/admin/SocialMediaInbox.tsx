@@ -108,7 +108,7 @@ export default function SocialMediaInbox({
         messages: SocialMessageApiRecord[];
         unreadCount: number;
       };
-      const mapped = data.messages.map((m) => ({
+      const mapped: SocialMessage[] = data.messages.map((m): SocialMessage => ({
         id: m.id,
         platform: m.platform,
         type: m.type,
@@ -116,7 +116,7 @@ export default function SocialMediaInbox({
         sender: {
           id: m.senderId || 'unknown',
           name: m.senderName || 'Unknown',
-          avatar: m.senderAvatar,
+          avatar: m.senderAvatar ?? undefined,
         },
         content: {
           text: m.content,
