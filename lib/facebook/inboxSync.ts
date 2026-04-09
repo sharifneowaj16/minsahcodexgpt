@@ -134,12 +134,20 @@ export async function syncRecentFacebookInbox({
   let afterCursor: string | null = null;
 
   while (conversations.length < conversationLimit) {
-    const page = await fetchFacebookGraph<GraphResponse<FacebookConversation>>(`${pageId}/conversations`, accessToken, {
+    const params: Record<string, string> = {
       fields: `id,updated_time,senders.limit(10){id,name},messages.limit(${messageLimitPerConversation}){id,message,created_time,from,attachments{mime_type,name,file_url,image_data,video_data,audio_data}}`,
       platform: 'messenger',
       limit: String(Math.min(50, conversationLimit - conversations.length)),
-      ...(afterCursor ? { after: afterCursor } : {}),
-    });
+    };
+    if (afterCursor) {
+      params.after = afterCursor;
+    }
+
+    const page: GraphResponse<FacebookConversation> = await fetchFacebookGraph(
+      `${pageId}/conversations`,
+      accessToken,
+      params
+    );
 
     const pageData = page.data ?? [];
     conversations.push(...pageData);
