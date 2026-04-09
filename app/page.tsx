@@ -235,7 +235,8 @@ export default function HomePage() {
         maxStock={product.stock}
         hasRequiredVariants={product.hasVariants}
         className={className}
-        stepperClassName="min-w-0 flex-1"
+        circleCart={true}
+        stepperClassName="shrink-0"
         buttonClassName="min-w-0 flex-1 px-2 text-xs"
         disabled={product.stock === 0}
       />

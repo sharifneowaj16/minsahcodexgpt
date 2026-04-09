@@ -558,6 +558,26 @@ export default function ProductClient({
                               -{relatedDiscount}%
                             </span>
                           )}
+                          {relatedProduct.stock > 0 && (
+                            <div
+                              className="absolute bottom-2.5 right-2.5 z-10"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                              }}
+                            >
+                              <CartStepper
+                                productId={relatedProduct.id}
+                                productName={relatedProduct.name}
+                                productImage={relatedProduct.image}
+                                price={relatedProduct.price}
+                                maxStock={relatedProduct.stock}
+                                hasRequiredVariants={relatedProduct.hasVariants}
+                                circleAdd={true}
+                                disabled={relatedProduct.stock === 0}
+                              />
+                            </div>
+                          )}
                         </div>
                         <div className="p-2.5">
                           <p className="line-clamp-2 text-xs font-medium leading-tight text-[#1A0D06]">
@@ -568,18 +588,6 @@ export default function ProductClient({
                           </p>
                         </div>
                         </Link>
-                        <div className="px-2.5 pb-2.5">
-                          <CartStepper
-                            productId={relatedProduct.id}
-                            productName={relatedProduct.name}
-                            productImage={relatedProduct.image}
-                            price={relatedProduct.price}
-                            maxStock={relatedProduct.stock}
-                            hasRequiredVariants={relatedProduct.hasVariants}
-                            className="w-full"
-                            disabled={relatedProduct.stock === 0}
-                          />
-                        </div>
                       </div>
                     );
                   })}
@@ -632,6 +640,26 @@ export default function ProductClient({
                                 -{bundleDiscount}%
                               </span>
                             )}
+                            {bundleProduct.stock > 0 && (
+                              <div
+                                className="absolute bottom-2.5 right-2.5 z-10"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                }}
+                              >
+                                <CartStepper
+                                  productId={bundleProduct.id}
+                                  productName={bundleProduct.name}
+                                  productImage={bundleProduct.image}
+                                  price={bundleProduct.price}
+                                  maxStock={bundleProduct.stock}
+                                  hasRequiredVariants={bundleProduct.hasVariants}
+                                  circleAdd={true}
+                                  disabled={bundleProduct.stock === 0}
+                                />
+                              </div>
+                            )}
                           </div>
                           <div className="p-2.5">
                             <p className="line-clamp-2 text-xs font-medium leading-tight text-[#1A0D06]">
@@ -645,18 +673,6 @@ export default function ProductClient({
                             </p>
                           </div>
                         </Link>
-                        <div className="px-2.5 pb-2.5">
-                          <CartStepper
-                            productId={bundleProduct.id}
-                            productName={bundleProduct.name}
-                            productImage={bundleProduct.image}
-                            price={bundleProduct.price}
-                            maxStock={bundleProduct.stock}
-                            hasRequiredVariants={bundleProduct.hasVariants}
-                            className="w-full"
-                            disabled={bundleProduct.stock === 0}
-                          />
-                        </div>
                       </div>
                     );
                   })}
@@ -702,6 +718,26 @@ export default function ProductClient({
                                 -{recentDiscount}%
                               </span>
                             )}
+                            {recentProduct.stock > 0 && (
+                              <div
+                                className="absolute bottom-2.5 right-2.5 z-10"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                }}
+                              >
+                                <CartStepper
+                                  productId={recentProduct.id}
+                                  productName={recentProduct.name}
+                                  productImage={recentProduct.image}
+                                  price={recentProduct.price}
+                                  maxStock={recentProduct.stock}
+                                  hasRequiredVariants={recentProduct.hasVariants}
+                                  circleAdd={true}
+                                  disabled={recentProduct.stock === 0}
+                                />
+                              </div>
+                            )}
                           </div>
                           <div className="p-2.5">
                             <p className="line-clamp-2 text-xs font-medium leading-tight text-[#1A0D06]">
@@ -712,18 +748,6 @@ export default function ProductClient({
                             </p>
                           </div>
                         </Link>
-                        <div className="px-2.5 pb-2.5">
-                          <CartStepper
-                            productId={recentProduct.id}
-                            productName={recentProduct.name}
-                            productImage={recentProduct.image}
-                            price={recentProduct.price}
-                            maxStock={recentProduct.stock}
-                            hasRequiredVariants={recentProduct.hasVariants}
-                            className="w-full"
-                            disabled={recentProduct.stock === 0}
-                          />
-                        </div>
                       </div>
                     );
                   })}

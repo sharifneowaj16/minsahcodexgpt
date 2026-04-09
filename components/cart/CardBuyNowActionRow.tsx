@@ -17,6 +17,7 @@ interface CardBuyNowActionRowProps {
   className?: string;
   stepperClassName?: string;
   buttonClassName?: string;
+  circleCart?: boolean;
 }
 
 export default function CardBuyNowActionRow({
@@ -29,13 +30,15 @@ export default function CardBuyNowActionRow({
   variants,
   disabled = false,
   className = '',
-  stepperClassName = 'flex-1',
+  stepperClassName,
   buttonClassName = '',
+  circleCart = false,
 }: CardBuyNowActionRowProps) {
   const [isBuyNowOpen, setIsBuyNowOpen] = useState(false);
 
   const canPurchase = variants?.length ? variants.some((variant) => variant.stock > 0) : maxStock > 0;
   const isDisabled = disabled || !canPurchase;
+  const resolvedStepperClassName = stepperClassName ?? (circleCart ? 'shrink-0' : 'flex-1');
 
   return (
     <>
@@ -48,8 +51,9 @@ export default function CardBuyNowActionRow({
           maxStock={maxStock}
           hasRequiredVariants={hasRequiredVariants}
           variants={variants}
-          className={stepperClassName}
+          className={resolvedStepperClassName}
           disabled={isDisabled}
+          circleAdd={circleCart}
         />
 
         <button

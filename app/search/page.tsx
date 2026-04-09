@@ -9,6 +9,7 @@ import {
   Star, Package, ChevronDown, ChevronUp, Filter, Volume2, VolumeX,
   Home, ChevronRight, AlertCircle, Flame, Tag, Zap, CheckCircle
 } from 'lucide-react';
+import CartStepper from '@/components/cart/CartStepper';
 import { formatPrice } from '@/utils/currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -150,6 +151,25 @@ function ProductCard({ product, query }: { product: Product; query: string }) {
             <span className="text-white text-xs font-bold bg-black/60 px-3 py-1 rounded-full">
               Out of Stock
             </span>
+          </div>
+        )}
+
+        {product.inStock !== false && (
+          <div
+            className="absolute bottom-2.5 right-2.5 z-10"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <CartStepper
+              productId={product.id}
+              productName={product.name}
+              productImage={img}
+              price={price}
+              maxStock={99}
+              circleAdd={true}
+            />
           </div>
         )}
       </div>

@@ -31,6 +31,14 @@ interface CartStepperProps {
 
 type ZeroStateMode = 'button' | 'stepper';
 
+interface ProductLookupResponse {
+  product: {
+    image?: string;
+    stock?: number;
+    variants?: VariantOption[];
+  };
+}
+
 function clampStock(stock?: number) {
   if (typeof stock !== 'number' || Number.isNaN(stock)) return 99;
   return Math.max(0, stock);
@@ -60,9 +68,23 @@ export default function CartStepper({
   const [modalMode, setModalMode] = useState<VariantModalMode>('select');
   const [boundVariantId, setBoundVariantId] = useState<string | null>(variantId ?? null);
   const [zeroStateMode, setZeroStateMode] = useState<ZeroStateMode>('button');
+  const [resolvedVariants, setResolvedVariants] = useState<VariantOption[]>(variants ?? []);
+  const [resolvedMaxStock, setResolvedMaxStock] = useState<number | null>(null);
+  const [resolvedProductImage, setResolvedProductImage] = useState<string | null>(null);
+  const [hasResolvedProductContext, setHasResolvedProductContext] = useState(Boolean(variants?.length));
+
+  useEffect(() => {
+    setResolvedVariants(variants ?? []);
+    setResolvedMaxStock(null);
+    setResolvedProductImage(null);
+    setHasResolvedProductContext(Boolean(variants?.length));
+  }, [maxStock, productId, productImage, variants]);
+
+  const effectiveVariants = resolvedVariants.length > 0 ? resolvedVariants : variants ?? [];
+  const effectiveProductImage = resolvedProductImage || variantImage || productImage;
 
   const isVariantProduct =
-    hasRequiredVariants || Boolean(variantId) || Boolean(variants && variants.length > 0);
+    hasRequiredVariants || Boolean(variantId || boundVariantId) || effectiveVariants.length > 0;
 
   const productCartItems = useMemo(
     () =>
@@ -93,13 +115,13 @@ export default function CartStepper({
   const currentVariantId = variantId ?? boundVariantId;
   const currentVariant = useMemo(() => {
     if (!currentVariantId) return null;
-    return variants?.find((v) => v.id === currentVariantId) ?? null;
-  }, [currentVariantId, variants]);
+    return effectiveVariants.find((v) => v.id === currentVariantId) ?? null;
+  }, [currentVariantId, effectiveVariants]);
 
   const currentCartItemId = currentVariantId || productId;
   const currentCartItem = items.find((item) => item.id === currentCartItemId);
   const qty = currentCartItem?.quantity ?? 0;
-  const safeMaxStock = clampStock(currentVariant?.stock ?? maxStock);
+  const safeMaxStock = clampStock(currentVariant?.stock ?? resolvedMaxStock ?? maxStock);
   const isOutOfStock = safeMaxStock <= 0;
 
   const runMutation = async (action: () => Promise<void>) => {
@@ -110,6 +132,52 @@ export default function CartStepper({
   const openModal = (mode: VariantModalMode) => {
     setModalMode(mode);
     setIsVariantModalOpen(true);
+  };
+
+  const resolveProductContext = async () => {
+    if (hasRequiredVariants || variantId || hasResolvedProductContext) {
+      return {
+        image: effectiveProductImage,
+        maxStock: resolvedMaxStock ?? maxStock,
+        variants: effectiveVariants,
+      };
+    }
+
+    setIsBusy(true);
+    try {
+      const res = await fetch(`/api/products/${productId}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load product');
+
+      const data = (await res.json()) as ProductLookupResponse;
+      const fetchedVariants = (data.product.variants ?? []).map((variant) => ({
+        id: variant.id,
+        name: variant.name,
+        price: variant.price,
+        stock: variant.stock,
+        sku: variant.sku,
+        image: variant.image ?? null,
+        attributes: (variant.attributes ?? {}) as Record<string, string>,
+      }));
+
+      setResolvedVariants(fetchedVariants);
+      setResolvedMaxStock(data.product.stock ?? maxStock);
+      setResolvedProductImage(data.product.image ?? null);
+      setHasResolvedProductContext(true);
+
+      return {
+        image: data.product.image ?? effectiveProductImage,
+        maxStock: data.product.stock ?? maxStock,
+        variants: fetchedVariants,
+      };
+    } catch {
+      return {
+        image: effectiveProductImage,
+        maxStock,
+        variants: effectiveVariants,
+      };
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const addOrIncrementVariant = async (variant: {
@@ -128,7 +196,7 @@ export default function CartStepper({
       variantName: [variant.attributes.size, variant.attributes.color].filter(Boolean).join(' / ') || variant.name,
       size: variant.attributes.size ?? null, color: variant.attributes.color ?? null,
       variantImage: variant.image ?? null, name: productName, price: variant.price,
-      quantity: initialQuantity, image: variant.image || productImage,
+      quantity: initialQuantity, image: variant.image || effectiveProductImage,
     }));
   };
 
@@ -159,11 +227,19 @@ export default function CartStepper({
 
   const handleAddToCart = async () => {
     if (disabled || isBusy || isOutOfStock) return;
-    if (isVariantProduct && !currentVariantId) { openModal('select'); return; }
+    const context = isVariantProduct ? null : await resolveProductContext();
+    const availableVariants = context?.variants ?? effectiveVariants;
+    const requiresVariantSelection =
+      hasRequiredVariants || Boolean(currentVariantId) || availableVariants.length > 0;
+    const nextVariant = currentVariantId
+      ? availableVariants.find((variant) => variant.id === currentVariantId) ?? null
+      : null;
+
+    if (requiresVariantSelection && !currentVariantId) { openModal('select'); return; }
     await runMutation(async () => {
-      if (isVariantProduct && currentVariant) {
+      if (requiresVariantSelection && nextVariant) {
         setZeroStateMode('button');
-        await addOrIncrementVariant(currentVariant);
+        await addOrIncrementVariant(nextVariant);
         return;
       }
       const existingQty = items.find((item) => item.id === currentCartItemId)?.quantity ?? 0;
@@ -175,21 +251,27 @@ export default function CartStepper({
         id: currentCartItemId, productId, variantId: variantId ?? null,
         variantName: variantName ?? null, size: size ?? null, color: color ?? null,
         variantImage: variantImage ?? null, name: productName, price,
-        quantity: initialQuantity, image: variantImage || productImage,
+        quantity: initialQuantity, image: variantImage || context?.image || effectiveProductImage,
       }));
     });
   };
 
   const handleIncrease = async () => {
     if (disabled || isBusy || isOutOfStock) return;
-    if (isVariantProduct) { openModal(qty === 0 ? 'select' : 'increase'); return; }
+    const context = isVariantProduct ? null : await resolveProductContext();
+    const requiresVariantSelection =
+      hasRequiredVariants ||
+      Boolean(currentVariantId) ||
+      Boolean((context?.variants ?? effectiveVariants).length);
+
+    if (requiresVariantSelection) { openModal(qty === 0 ? 'select' : 'increase'); return; }
     await runMutation(async () => {
       if (qty === 0) {
         await Promise.resolve(addItem({
           id: currentCartItemId, productId, variantId: variantId ?? null,
           variantName: variantName ?? null, size: size ?? null, color: color ?? null,
           variantImage: variantImage ?? null, name: productName, price,
-          quantity: initialQuantity, image: variantImage || productImage,
+          quantity: initialQuantity, image: variantImage || context?.image || effectiveProductImage,
         }));
         return;
       }
@@ -228,8 +310,8 @@ export default function CartStepper({
       mode={modalMode}
       productId={productId}
       productName={productName}
-      productImage={productImage}
-      variants={variants}
+      productImage={effectiveProductImage}
+      variants={effectiveVariants}
       currentVariantId={currentVariantId}
       onClose={() => setIsVariantModalOpen(false)}
       onConfirm={handleSelectConfirm}

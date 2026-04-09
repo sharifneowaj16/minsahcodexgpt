@@ -3,8 +3,9 @@
 import { useCart } from '@/contexts/CartContext';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Search, ShoppingCart, Heart, Home, User, ChevronLeft, Plus, Minus } from 'lucide-react';
+import { Search, ShoppingCart, Heart, Home, User, ChevronLeft } from 'lucide-react';
 import { formatPrice } from '@/utils/currency';
+import CartStepper from '@/components/cart/CartStepper';
 
 const categories = ['All', 'Makeup', 'Skincare', 'Hair Care', 'Fragrance'];
 
@@ -18,23 +19,9 @@ const products = [
 ];
 
 export default function NewArrivalsPage() {
-  const { items, updateQuantity } = useCart();
+  const { items } = useCart();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-
-  const getQuantity = (productId: string) => quantities[productId] || 0;
-
-  const incrementQuantity = (productId: string) => {
-    setQuantities(prev => ({ ...prev, [productId]: (prev[productId] || 0) + 1 }));
-  };
-
-  const decrementQuantity = (productId: string) => {
-    setQuantities(prev => ({
-      ...prev,
-      [productId]: Math.max(0, (prev[productId] || 0) - 1)
-    }));
-  };
 
   return (
     <div className="min-h-screen bg-minsah-light pb-20">
@@ -115,6 +102,23 @@ export default function NewArrivalsPage() {
                 <button className="absolute top-2 right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-red-50 transition">
                   <Heart size={16} className="text-minsah-secondary" />
                 </button>
+                <div
+                  className="absolute bottom-2.5 right-2.5 z-10"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                >
+                  <CartStepper
+                    productId={product.id}
+                    productName={product.name}
+                    productImage={product.image}
+                    price={product.price}
+                    maxStock={product.stock}
+                    circleAdd={true}
+                    disabled={product.stock === 0}
+                  />
+                </div>
               </div>
 
               {/* Product Info */}
@@ -122,36 +126,10 @@ export default function NewArrivalsPage() {
                 <h3 className="font-semibold text-sm text-minsah-dark mb-1">{product.name}</h3>
                 <p className="text-xs text-minsah-secondary mb-2">{product.brand}</p>
 
-                {/* Price and Quantity */}
                 <div className="flex items-center justify-between">
                   <span className="text-base font-bold text-minsah-primary">
                     {formatPrice(product.price)}
                   </span>
-
-                  {/* Quantity Controls */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        decrementQuantity(product.id);
-                      }}
-                      className="w-6 h-6 rounded-full border border-minsah-secondary/30 flex items-center justify-center hover:bg-minsah-accent transition"
-                    >
-                      <Minus size={12} className="text-minsah-dark" />
-                    </button>
-                    <span className="text-sm font-semibold text-minsah-dark min-w-[20px] text-center">
-                      {getQuantity(product.id)}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        incrementQuantity(product.id);
-                      }}
-                      className="w-6 h-6 rounded-full bg-minsah-primary flex items-center justify-center hover:bg-minsah-dark transition"
-                    >
-                      <Plus size={12} className="text-white" />
-                    </button>
-                  </div>
                 </div>
               </Link>
 
