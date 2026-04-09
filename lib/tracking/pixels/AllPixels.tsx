@@ -15,11 +15,18 @@ import ClarityPixel from './ClarityPixel';
 import MixpanelPixel from './MixpanelPixel';
 
 export default function AllPixels() {
+  const facebookPixelId =
+    process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID || process.env.NEXT_PUBLIC_FB_PIXEL_ID || '';
+  const facebookPixelEnabled =
+    process.env.NEXT_PUBLIC_FB_PIXEL_ENABLED === 'true' ||
+    (!!process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID &&
+      process.env.NEXT_PUBLIC_FB_PIXEL_ENABLED !== 'false');
+
   // Read from environment variables
   const config = {
     facebook: {
-      enabled: process.env.NEXT_PUBLIC_FB_PIXEL_ENABLED === 'true',
-      pixelId: process.env.NEXT_PUBLIC_FB_PIXEL_ID || '',
+      enabled: facebookPixelEnabled,
+      pixelId: facebookPixelId,
     },
     google: {
       enabled: process.env.NEXT_PUBLIC_GA_ENABLED === 'true',

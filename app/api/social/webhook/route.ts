@@ -66,21 +66,25 @@ interface YouTubeCommentPayload {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const platform = request.headers.get('x-platform') || 'unknown';
+    const headerPlatform = request.headers.get('x-platform') || 'unknown';
+    const platform =
+      body.object === 'page'
+        ? 'facebook'
+        : body.object === 'instagram'
+          ? 'instagram'
+          : headerPlatform;
 
     if (platform === 'facebook' || platform === 'instagram') {
-      if (body.object === 'page' || body.object === 'instagram') {
-        for (const entry of body.entry || []) {
-          if (entry.messaging) {
-            for (const event of entry.messaging) {
-              await processMessage(platform, event);
-            }
+      for (const entry of body.entry || []) {
+        if (entry.messaging) {
+          for (const event of entry.messaging) {
+            await processMessage(platform, event);
           }
-          if (entry.changes) {
-            for (const change of entry.changes) {
-              if (change.field === 'comments') {
-                await processComment(platform, change.value);
-              }
+        }
+        if (entry.changes) {
+          for (const change of entry.changes) {
+            if (change.field === 'comments') {
+              await processComment(platform, change.value);
             }
           }
         }
