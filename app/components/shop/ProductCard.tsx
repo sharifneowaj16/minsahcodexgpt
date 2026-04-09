@@ -165,7 +165,10 @@ export default function ProductCard({ product, onQuickView }: ProductCardProps) 
             {!isDisabled && (
               <div
                 className="absolute bottom-2.5 right-2.5 z-20"
-                onClick={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
               >
                 <CartStepper
                   productId={product.id}

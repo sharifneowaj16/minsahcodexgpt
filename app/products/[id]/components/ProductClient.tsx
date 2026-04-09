@@ -14,6 +14,7 @@ import {
   Truck,
 } from 'lucide-react';
 import CartStepper from '@/components/cart/CartStepper';
+import CardBuyNowButton from '@/components/cart/CardBuyNowButton';
 import ProductGallery from './ProductGallery';
 import { GiftRequestButton, ShareButton } from './GiftShareButtons';
 import ProductStickyHeader from './ProductStickyHeader';
@@ -588,6 +589,16 @@ export default function ProductClient({
                           </p>
                         </div>
                         </Link>
+                        <div className="px-2.5 pb-2.5">
+                          <CardBuyNowButton
+                            productId={relatedProduct.id}
+                            productName={relatedProduct.name}
+                            productImage={relatedProduct.image}
+                            price={relatedProduct.price}
+                            disabled={relatedProduct.stock === 0}
+                            className="w-full"
+                          />
+                        </div>
                       </div>
                     );
                   })}
@@ -673,6 +684,16 @@ export default function ProductClient({
                             </p>
                           </div>
                         </Link>
+                        <div className="px-2.5 pb-2.5">
+                          <CardBuyNowButton
+                            productId={bundleProduct.id}
+                            productName={bundleProduct.name}
+                            productImage={bundleProduct.image}
+                            price={bundleProduct.price}
+                            disabled={bundleProduct.stock === 0}
+                            className="w-full"
+                          />
+                        </div>
                       </div>
                     );
                   })}
@@ -748,6 +769,16 @@ export default function ProductClient({
                             </p>
                           </div>
                         </Link>
+                        <div className="px-2.5 pb-2.5">
+                          <CardBuyNowButton
+                            productId={recentProduct.id}
+                            productName={recentProduct.name}
+                            productImage={recentProduct.image}
+                            price={recentProduct.price}
+                            disabled={recentProduct.stock === 0}
+                            className="w-full"
+                          />
+                        </div>
                       </div>
                     );
                   })}

@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Search, Heart, ShoppingCart, Home as HomeIcon, User, ChevronRight, Flame } from 'lucide-react';
 import { formatPrice } from '@/utils/currency';
-import CardBuyNowActionRow from '@/components/cart/CardBuyNowActionRow';
+import CartStepper from '@/components/cart/CartStepper';
+import CardBuyNowButton from '@/components/cart/CardBuyNowButton';
 
 // Helper: render a real image URL or fall back to emoji text
 function ProductImage({ src, alt }: { src: string; alt: string }) {
@@ -225,20 +226,40 @@ export default function HomePage() {
     [activeProducts]
   );
 
-  const renderHomeCartAction = (product: HomeProductCardItem, className: string) => {
+  const renderHomeOverlayCart = (product: HomeProductCardItem) => {
+    if (product.stock === 0) return null;
+
     return (
-      <CardBuyNowActionRow
+      <div
+        className="absolute bottom-2.5 right-2.5 z-10"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+      >
+        <CartStepper
+          productId={product.id}
+          productName={product.name}
+          productImage={product.image}
+          price={product.price}
+          maxStock={product.stock}
+          hasRequiredVariants={product.hasVariants}
+          disabled={product.stock === 0}
+          circleAdd={true}
+        />
+      </div>
+    );
+  };
+
+  const renderHomeBuyNowButton = (product: HomeProductCardItem, className: string) => {
+    return (
+      <CardBuyNowButton
         productId={product.id}
         productName={product.name}
         productImage={product.image}
         price={product.price}
-        maxStock={product.stock}
-        hasRequiredVariants={product.hasVariants}
-        className={className}
-        circleCart={true}
-        stepperClassName="shrink-0"
-        buttonClassName="min-w-0 flex-1 px-2 text-xs"
         disabled={product.stock === 0}
+        className={className}
       />
     );
   };
@@ -508,6 +529,7 @@ export default function HomePage() {
                   <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
                     {product.discount}%
                   </div>
+                  {renderHomeOverlayCart(product)}
                 </div>
                 <h3 className="text-xs font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <div className="flex items-center gap-2 mb-2">
@@ -519,7 +541,7 @@ export default function HomePage() {
                   </span>
                 </div>
               </Link>
-              {renderHomeCartAction(product, 'w-full')}
+              {renderHomeBuyNowButton(product, 'w-full')}
             </div>
           ))}
         </div>
@@ -545,6 +567,7 @@ export default function HomePage() {
                   <div className="absolute top-2 right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm">
                     <Heart size={16} className="text-minsah-secondary" />
                   </div>
+                  {renderHomeOverlayCart(product)}
                 </div>
                 <h3 className="text-xs font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <p className="text-xs text-minsah-secondary mb-1">{product.sku}</p>
@@ -552,7 +575,7 @@ export default function HomePage() {
                   {formatPrice(product.price)}
                 </span>
               </Link>
-              {renderHomeCartAction(product, 'w-full')}
+              {renderHomeBuyNowButton(product, 'w-full')}
             </div>
           ))}
         </div>
@@ -578,13 +601,14 @@ export default function HomePage() {
                   <div className="absolute top-2 right-2 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-sm">
                     <Heart size={14} className="text-minsah-secondary" />
                   </div>
+                  {renderHomeOverlayCart(product)}
                 </div>
                 <h3 className="text-xs font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <span className="text-sm font-bold text-minsah-primary block mb-2">
                   {formatPrice(product.price)}
                 </span>
               </Link>
-              {renderHomeCartAction(product, 'w-full')}
+              {renderHomeBuyNowButton(product, 'w-full')}
             </div>
           ))}
         </div>
@@ -610,6 +634,7 @@ export default function HomePage() {
                   <div className="absolute top-1 right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm">
                     <Heart size={12} className="text-minsah-secondary" />
                   </div>
+                  {renderHomeOverlayCart(product)}
                 </div>
                 <h3 className="text-[10px] font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <div className="flex items-center gap-1 mb-1">
@@ -624,7 +649,7 @@ export default function HomePage() {
                   <span className="text-[8px] text-minsah-secondary">({product.reviews})</span>
                 </div>
               </Link>
-              {renderHomeCartAction(product, 'w-full')}
+              {renderHomeBuyNowButton(product, 'w-full text-xs')}
             </div>
           ))}
         </div>
@@ -650,13 +675,14 @@ export default function HomePage() {
                   <div className="absolute top-1 right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-sm">
                     <Heart size={12} className="text-red-500 fill-red-500" />
                   </div>
+                  {renderHomeOverlayCart(product)}
                 </div>
                 <h3 className="text-[10px] font-semibold text-minsah-dark mb-1 line-clamp-2">{product.name}</h3>
                 <span className="text-xs font-bold text-minsah-primary block mb-2">
                   {formatPrice(product.price)}
                 </span>
               </Link>
-              {renderHomeCartAction(product, 'w-full')}
+              {renderHomeBuyNowButton(product, 'w-full text-xs')}
             </div>
           ))}
         </div>

@@ -183,12 +183,12 @@ export default function CartStepper({
   const addOrIncrementVariant = async (variant: {
     id: string; name: string; price: number; image?: string | null;
     attributes: Record<string, string>;
-  }) => {
+  }, quantity = 1) => {
     const targetId = variant.id;
     const existingQty = items.find((item) => item.id === targetId)?.quantity ?? 0;
     if (!variantId) setBoundVariantId(targetId);
     if (existingQty > 0) {
-      await Promise.resolve(updateQuantity(targetId, existingQty + 1));
+      await Promise.resolve(updateQuantity(targetId, existingQty + quantity));
       return;
     }
     await Promise.resolve(addItem({
@@ -196,13 +196,13 @@ export default function CartStepper({
       variantName: [variant.attributes.size, variant.attributes.color].filter(Boolean).join(' / ') || variant.name,
       size: variant.attributes.size ?? null, color: variant.attributes.color ?? null,
       variantImage: variant.image ?? null, name: productName, price: variant.price,
-      quantity: initialQuantity, image: variant.image || effectiveProductImage,
+      quantity: Math.max(initialQuantity, quantity), image: variant.image || effectiveProductImage,
     }));
   };
 
-  const handleSelectConfirm = async ({ variant }: VariantSelectionPayload) => {
+  const handleSelectConfirm = async ({ variant, quantity }: VariantSelectionPayload) => {
     setZeroStateMode('button');
-    await runMutation(async () => { await addOrIncrementVariant(variant); });
+    await runMutation(async () => { await addOrIncrementVariant(variant, quantity); });
   };
 
   const handleAdjustVariant = async ({ variant, delta }: VariantAdjustmentPayload) => {

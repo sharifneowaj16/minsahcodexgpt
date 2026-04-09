@@ -19,6 +19,7 @@ export interface VariantSelectionPayload {
   productImage: string;
   basePrice: number;
   variant: VariantOption;
+  quantity: number;
 }
 
 export interface VariantAdjustmentPayload {
@@ -98,6 +99,7 @@ export default function VariantModal({
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
     currentVariantId ?? null
   );
+  const [selectedQuantity, setSelectedQuantity] = useState(0);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,6 +124,7 @@ export default function VariantModal({
     setResolvedProductImage(productImage ?? '');
     setResolvedVariants(prefetched);
     setSelectedVariantId(currentVariantId ?? null);
+    setSelectedQuantity(currentVariantId ? 1 : prefetched.length === 1 ? 1 : 0);
     setError(null);
 
     if (prefetched.length > 0) return;
@@ -136,17 +139,17 @@ export default function VariantModal({
         setResolvedProductName(data.product.name);
         setResolvedProductImage(data.product.image);
         setResolvedBasePrice(data.product.price);
-        setResolvedVariants(
-          data.product.variants.map((v) => ({
-            id: v.id,
-            name: v.name,
-            price: v.price,
-            stock: v.stock,
-            sku: v.sku,
-            image: v.image ?? null,
-            attributes: (v.attributes ?? {}) as Record<string, string>,
-          }))
-        );
+        const fetchedVariants = data.product.variants.map((v) => ({
+          id: v.id,
+          name: v.name,
+          price: v.price,
+          stock: v.stock,
+          sku: v.sku,
+          image: v.image ?? null,
+          attributes: (v.attributes ?? {}) as Record<string, string>,
+        }));
+        setResolvedVariants(fetchedVariants);
+        setSelectedQuantity(currentVariantId ? 1 : fetchedVariants.length === 1 ? 1 : 0);
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : 'Failed to load variants');
       } finally {
@@ -194,9 +197,21 @@ export default function VariantModal({
   const selectedVariant =
     resolvedVariants.find((v) => v.id === selectedVariantId) ?? null;
 
+  useEffect(() => {
+    if (!isOpen || mode !== 'select') return;
+    if (!selectedVariantId && resolvedVariants.length === 1) {
+      setSelectedVariantId(resolvedVariants[0].id);
+      setSelectedQuantity(1);
+      return;
+    }
+    if (!selectedVariantId && selectedQuantity !== 0) {
+      setSelectedQuantity(0);
+    }
+  }, [isOpen, mode, resolvedVariants, selectedQuantity, selectedVariantId]);
+
   const canConfirm =
     mode === 'select' &&
-    Boolean(selectedVariant && selectedVariant.stock > 0 && !submitting && !loading);
+    Boolean(selectedVariant && selectedVariant.stock > 0 && selectedQuantity > 0 && !submitting && !loading);
 
   const modalTitle =
     mode === 'decrease'
@@ -215,6 +230,7 @@ export default function VariantModal({
         productImage: resolvedProductImage,
         basePrice: resolvedBasePrice || selectedVariant.price,
         variant: selectedVariant,
+        quantity: selectedQuantity,
       });
       onClose();
     } finally {
@@ -233,11 +249,22 @@ export default function VariantModal({
     }
   };
 
+  const updateSelectedVariantQuantity = (variant: VariantOption, nextQuantity: number) => {
+    if (nextQuantity <= 0) {
+      setSelectedVariantId(null);
+      setSelectedQuantity(0);
+      return;
+    }
+
+    setSelectedVariantId(variant.id);
+    setSelectedQuantity(Math.min(variant.stock, nextQuantity));
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 px-4 py-6 sm:items-center">
-      <div className="w-full max-w-lg overflow-hidden rounded-[30px] bg-white shadow-2xl">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 sm:items-center sm:px-4 sm:py-6">
+      <div className="w-full max-w-lg overflow-hidden rounded-t-[30px] bg-white shadow-2xl sm:rounded-[30px]">
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between border-b border-stone-200 px-5 py-4">
           <div>
@@ -259,7 +286,7 @@ export default function VariantModal({
         </div>
 
         {/* ── Body ────────────────────────────────────────────────────── */}
-        <div className="max-h-[72vh] overflow-y-auto px-5 py-4">
+        <div className="max-h-[78vh] overflow-y-auto px-4 py-4 sm:px-5">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-stone-400">
               <Loader2 size={22} className="animate-spin" />
@@ -273,32 +300,27 @@ export default function VariantModal({
               No variants available for this product right now.
             </div>
           ) : mode === 'select' ? (
-            <div className="space-y-3">
-              {/* hint banner */}
-              <div className="rounded-3xl bg-[#F7F2EC] px-4 py-3 text-sm text-stone-600">
-                Choose a variant to add to your cart.
+            <div className="space-y-4">
+              <div className="rounded-3xl bg-[#F7F2EC] p-4 text-sm text-stone-700">
+                Select the variant and quantity you want to add to your cart.
               </div>
 
-              {/* Variant rows */}
               {resolvedVariants.map((variant) => {
-                const isSelected = selectedVariantId === variant.id;
+                const quantity = selectedVariantId === variant.id ? selectedQuantity : 0;
+                const isSelected = quantity > 0;
                 const outOfStock = variant.stock <= 0;
 
                 return (
-                  <button
+                  <div
                     key={variant.id}
-                    type="button"
-                    onClick={() => !outOfStock && setSelectedVariantId(variant.id)}
-                    disabled={outOfStock}
-                    className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                    className={`flex items-center gap-3 rounded-2xl border px-3 py-3 sm:px-4 ${
                       isSelected
                         ? 'border-[#3D1F0E] bg-[#F5E9DC]'
                         : outOfStock
-                          ? 'cursor-not-allowed border-stone-200 bg-stone-50 opacity-60'
-                          : 'border-stone-200 hover:border-[#3D1F0E] hover:bg-[#FAF5EF]'
+                          ? 'border-stone-200 bg-stone-50 opacity-60'
+                          : 'border-stone-200'
                     }`}
                   >
-                    {/* Thumbnail */}
                     <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-stone-100">
                       {(variant.image || resolvedProductImage) ? (
                         <img
@@ -309,58 +331,61 @@ export default function VariantModal({
                       ) : null}
                     </div>
 
-                    {/* Info */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-sm font-semibold text-stone-900">
                           {toVariantLabel(variant)}
                         </p>
                         {isSelected && (
-                          <span className="flex-shrink-0 rounded-full bg-[#3D1F0E] p-0.5 text-white">
-                            <Check size={11} />
+                          <span className="flex-shrink-0 rounded-full bg-[#3D1F0E] px-2 py-0.5 text-[10px] font-semibold text-white">
+                            Selected
                           </span>
                         )}
                       </div>
                       <p className="mt-0.5 text-xs text-stone-500">
-                        {outOfStock ? 'Out of stock' : `${variant.stock} available`}
+                        {outOfStock
+                          ? 'Out of stock'
+                          : `৳${variant.price.toLocaleString('bn-BD')} · ${variant.stock} available`}
                       </p>
                     </div>
 
-                    {/* Price */}
-                    <p className="flex-shrink-0 text-sm font-semibold text-stone-900">
-                      ৳{variant.price.toLocaleString('bn-BD')}
-                    </p>
-                  </button>
+                    <div className="flex items-center rounded-full border border-[#D6C0A9] bg-white">
+                      <button
+                        type="button"
+                        onClick={() => updateSelectedVariantQuantity(variant, quantity - 1)}
+                        disabled={quantity <= 0 || submitting}
+                        className="flex h-9 w-9 items-center justify-center rounded-l-full text-[#3D1F0E] disabled:cursor-not-allowed disabled:opacity-35"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="min-w-8 text-center text-sm font-semibold text-stone-900">
+                        {quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateSelectedVariantQuantity(variant, quantity + 1)}
+                        disabled={outOfStock || quantity >= variant.stock || submitting}
+                        className="flex h-9 w-9 items-center justify-center rounded-r-full text-[#3D1F0E] disabled:cursor-not-allowed disabled:opacity-35"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
 
-              {/* Selected variant preview */}
-              {selectedVariant && (
-                <div className="rounded-3xl bg-[#F7F2EC] p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-stone-100">
-                      {(selectedVariant.image || resolvedProductImage) ? (
-                        <img
-                          src={selectedVariant.image || resolvedProductImage}
-                          alt={resolvedProductName}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-stone-900">
-                        {toVariantLabel(selectedVariant)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-stone-500">
-                        {selectedVariant.stock} available
-                      </p>
-                    </div>
-                    <p className="flex-shrink-0 text-base font-bold text-[#3D1F0E]">
-                      ৳{selectedVariant.price.toLocaleString('bn-BD')}
-                    </p>
-                  </div>
+              <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-stone-600">Selected Qty</span>
+                  <span className="font-semibold text-stone-900">{selectedQuantity}</span>
                 </div>
-              )}
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="text-stone-600">Subtotal</span>
+                  <span className="font-semibold text-stone-900">
+                    {selectedVariant ? `৳${(selectedVariant.price * selectedQuantity).toLocaleString('bn-BD')}` : '৳0'}
+                  </span>
+                </div>
+              </div>
             </div>
           ) : (
             /* increase / decrease mode */
@@ -447,7 +472,7 @@ export default function VariantModal({
 
         {/* ── Footer ──────────────────────────────────────────────────── */}
         {mode === 'select' && (
-          <div className="border-t border-stone-200 px-5 py-4">
+          <div className="border-t border-stone-200 px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:px-5 sm:pb-4">
             <button
               type="button"
               onClick={() => void handleConfirm()}

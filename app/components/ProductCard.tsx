@@ -63,7 +63,10 @@ export default function ProductCard({
             {/* ── Circle cart button — bottom-right ───────────────────── */}
             <div
               className="absolute bottom-2.5 right-2.5 z-10"
-              onClick={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
             >
               <CartStepper
                 productId={id}
@@ -89,7 +92,10 @@ export default function ProductCard({
             </div>
 
             {/* Buy Now */}
-            <div onClick={(e) => e.preventDefault()}>
+            <div onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}>
               <button
                 type="button"
                 onClick={() => setIsBuyNowOpen(true)}

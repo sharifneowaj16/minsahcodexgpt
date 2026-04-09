@@ -10,6 +10,7 @@ import {
   Home, ChevronRight, AlertCircle, Flame, Tag, Zap, CheckCircle
 } from 'lucide-react';
 import CartStepper from '@/components/cart/CartStepper';
+import CardBuyNowButton from '@/components/cart/CardBuyNowButton';
 import { formatPrice } from '@/utils/currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -225,6 +226,22 @@ function ProductCard({ product, query }: { product: Product; query: string }) {
             <CheckCircle size={10} />In Stock
           </p>
         )}
+
+        <div
+          className="mt-3"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <CardBuyNowButton
+            productId={product.id}
+            productName={product.name}
+            productImage={img}
+            price={price}
+            disabled={product.inStock === false}
+          />
+        </div>
       </div>
     </Link>
   );

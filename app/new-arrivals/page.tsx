@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Search, ShoppingCart, Heart, Home, User, ChevronLeft } from 'lucide-react';
 import { formatPrice } from '@/utils/currency';
 import CartStepper from '@/components/cart/CartStepper';
+import CardBuyNowButton from '@/components/cart/CardBuyNowButton';
 
 const categories = ['All', 'Makeup', 'Skincare', 'Hair Care', 'Fragrance'];
 
@@ -132,6 +133,22 @@ export default function NewArrivalsPage() {
                   </span>
                 </div>
               </Link>
+
+              <div
+                className="mt-3"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
+                <CardBuyNowButton
+                  productId={product.id}
+                  productName={product.name}
+                  productImage={product.image}
+                  price={product.price}
+                  disabled={product.stock === 0}
+                />
+              </div>
 
               {/* Stock Status */}
               <div className="mt-2 flex items-center gap-1">
