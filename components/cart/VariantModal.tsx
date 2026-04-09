@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, Loader2, Minus, Plus, ShoppingCart, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Loader2, Minus, Plus, ShoppingCart, X } from 'lucide-react';
 
 export interface VariantOption {
   id: string;
@@ -104,7 +105,6 @@ export default function VariantModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Lock body scroll
   useEffect(() => {
     if (!isOpen) return;
     const prev = document.body.style.overflow;
@@ -114,7 +114,6 @@ export default function VariantModal({
     };
   }, [isOpen]);
 
-  // Reset & optionally fetch product on open
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
@@ -136,9 +135,11 @@ export default function VariantModal({
         if (!res.ok) throw new Error('Failed to load variants');
         const data = (await res.json()) as ProductResponse;
         if (!active) return;
+
         setResolvedProductName(data.product.name);
         setResolvedProductImage(data.product.image);
         setResolvedBasePrice(data.product.price);
+
         const fetchedVariants = data.product.variants.map((v) => ({
           id: v.id,
           name: v.name,
@@ -148,6 +149,7 @@ export default function VariantModal({
           image: v.image ?? null,
           attributes: (v.attributes ?? {}) as Record<string, string>,
         }));
+
         setResolvedVariants(fetchedVariants);
         setSelectedQuantity(currentVariantId ? 1 : fetchedVariants.length === 1 ? 1 : 0);
       } catch (err) {
@@ -163,7 +165,6 @@ export default function VariantModal({
     };
   }, [currentVariantId, isOpen, productId, productImage, productName, variants]);
 
-  // Derive base price from variants if not set
   useEffect(() => {
     if (!isOpen || resolvedBasePrice > 0 || resolvedVariants.length === 0) return;
     const lowest = resolvedVariants.reduce(
@@ -173,7 +174,6 @@ export default function VariantModal({
     setResolvedBasePrice(lowest);
   }, [isOpen, resolvedBasePrice, resolvedVariants]);
 
-  // Keyboard close
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
@@ -183,7 +183,6 @@ export default function VariantModal({
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
 
-  // For increase/decrease modes — sorted list with current variant first
   const actionVariants = useMemo(() => {
     if (mode === 'select') return [];
     const currentId = currentVariantId ?? selectedVariantId;
@@ -194,8 +193,7 @@ export default function VariantModal({
     });
   }, [currentVariantId, mode, resolvedVariants, selectedVariantId]);
 
-  const selectedVariant =
-    resolvedVariants.find((v) => v.id === selectedVariantId) ?? null;
+  const selectedVariant = resolvedVariants.find((v) => v.id === selectedVariantId) ?? null;
 
   useEffect(() => {
     if (!isOpen || mode !== 'select') return;
@@ -211,7 +209,13 @@ export default function VariantModal({
 
   const canConfirm =
     mode === 'select' &&
-    Boolean(selectedVariant && selectedVariant.stock > 0 && selectedQuantity > 0 && !submitting && !loading);
+    Boolean(
+      selectedVariant &&
+        selectedVariant.stock > 0 &&
+        selectedQuantity > 0 &&
+        !submitting &&
+        !loading
+    );
 
   const modalTitle =
     mode === 'decrease'
@@ -262,31 +266,34 @@ export default function VariantModal({
 
   if (!isOpen) return null;
 
-  return (
+  const modalNode = (
     <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 sm:items-center sm:px-4 sm:py-6">
-      <div className="w-full max-w-lg overflow-hidden rounded-t-[30px] bg-white shadow-2xl sm:rounded-[30px]">
-        {/* ── Header ──────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between border-b border-stone-200 px-5 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
-              {modalTitle}
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-stone-900">
-              {resolvedProductName || productName || 'Product'}
-            </h2>
+      <div className="flex h-[min(100dvh,calc(100dvh-0.25rem))] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl sm:h-auto sm:max-h-[min(88vh,760px)] sm:rounded-[30px]">
+        <div className="shrink-0 border-b border-stone-200 px-4 py-4 sm:px-5">
+          <div className="mb-3 flex justify-center sm:hidden">
+            <span className="h-1.5 w-12 rounded-full bg-stone-200" />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-2 text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
+                {modalTitle}
+              </p>
+              <h2 className="mt-1 line-clamp-2 text-base font-semibold text-stone-900 sm:text-lg">
+                {resolvedProductName || productName || 'Product'}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-full p-2 text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
-        {/* ── Body ────────────────────────────────────────────────────── */}
-        <div className="max-h-[78vh] overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-stone-400">
               <Loader2 size={22} className="animate-spin" />
@@ -313,7 +320,7 @@ export default function VariantModal({
                 return (
                   <div
                     key={variant.id}
-                    className={`flex items-center gap-3 rounded-2xl border px-3 py-3 sm:px-4 ${
+                    className={`rounded-2xl border px-3 py-3 sm:px-4 ${
                       isSelected
                         ? 'border-[#3D1F0E] bg-[#F5E9DC]'
                         : outOfStock
@@ -321,54 +328,58 @@ export default function VariantModal({
                           : 'border-stone-200'
                     }`}
                   >
-                    <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-stone-100">
-                      {(variant.image || resolvedProductImage) ? (
-                        <img
-                          src={variant.image || resolvedProductImage}
-                          alt={toVariantLabel(variant)}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-stone-900">
-                          {toVariantLabel(variant)}
-                        </p>
-                        {isSelected && (
-                          <span className="flex-shrink-0 rounded-full bg-[#3D1F0E] px-2 py-0.5 text-[10px] font-semibold text-white">
-                            Selected
-                          </span>
-                        )}
+                    <div className="flex items-start gap-3">
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-stone-100 sm:h-16 sm:w-16">
+                        {(variant.image || resolvedProductImage) ? (
+                          <img
+                            src={variant.image || resolvedProductImage}
+                            alt={toVariantLabel(variant)}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
                       </div>
-                      <p className="mt-0.5 text-xs text-stone-500">
-                        {outOfStock
-                          ? 'Out of stock'
-                          : `৳${variant.price.toLocaleString('bn-BD')} · ${variant.stock} available`}
-                      </p>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="break-words text-sm font-semibold text-stone-900">
+                            {toVariantLabel(variant)}
+                          </p>
+                          {isSelected && (
+                            <span className="flex-shrink-0 rounded-full bg-[#3D1F0E] px-2 py-0.5 text-[10px] font-semibold text-white">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-stone-500">
+                          {outOfStock
+                            ? 'Out of stock'
+                            : `à§³${variant.price.toLocaleString('bn-BD')} Â· ${variant.stock} available`}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center rounded-full border border-[#D6C0A9] bg-white">
-                      <button
-                        type="button"
-                        onClick={() => updateSelectedVariantQuantity(variant, quantity - 1)}
-                        disabled={quantity <= 0 || submitting}
-                        className="flex h-9 w-9 items-center justify-center rounded-l-full text-[#3D1F0E] disabled:cursor-not-allowed disabled:opacity-35"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="min-w-8 text-center text-sm font-semibold text-stone-900">
-                        {quantity}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => updateSelectedVariantQuantity(variant, quantity + 1)}
-                        disabled={outOfStock || quantity >= variant.stock || submitting}
-                        className="flex h-9 w-9 items-center justify-center rounded-r-full text-[#3D1F0E] disabled:cursor-not-allowed disabled:opacity-35"
-                      >
-                        <Plus size={14} />
-                      </button>
+                    <div className="mt-3 flex justify-end">
+                      <div className="flex items-center rounded-full border border-[#D6C0A9] bg-white">
+                        <button
+                          type="button"
+                          onClick={() => updateSelectedVariantQuantity(variant, quantity - 1)}
+                          disabled={quantity <= 0 || submitting}
+                          className="flex h-9 w-9 items-center justify-center rounded-l-full text-[#3D1F0E] disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="min-w-8 text-center text-sm font-semibold text-stone-900">
+                          {quantity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateSelectedVariantQuantity(variant, quantity + 1)}
+                          disabled={outOfStock || quantity >= variant.stock || submitting}
+                          className="flex h-9 w-9 items-center justify-center rounded-r-full text-[#3D1F0E] disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -382,13 +393,14 @@ export default function VariantModal({
                 <div className="mt-2 flex items-center justify-between text-sm">
                   <span className="text-stone-600">Subtotal</span>
                   <span className="font-semibold text-stone-900">
-                    {selectedVariant ? `৳${(selectedVariant.price * selectedQuantity).toLocaleString('bn-BD')}` : '৳0'}
+                    {selectedVariant
+                      ? `à§³${(selectedVariant.price * selectedQuantity).toLocaleString('bn-BD')}`
+                      : 'à§³0'}
                   </span>
                 </div>
               </div>
             </div>
           ) : (
-            /* increase / decrease mode */
             <div className="space-y-3">
               <div className="rounded-3xl bg-[#F7F2EC] px-4 py-3 text-sm text-stone-600">
                 {mode === 'decrease'
@@ -404,65 +416,64 @@ export default function VariantModal({
                 return (
                   <div
                     key={variant.id}
-                    className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${
+                    className={`rounded-2xl border px-4 py-3 ${
                       isCurrent ? 'border-[#3D1F0E] bg-[#F5E9DC]' : 'border-stone-200'
                     }`}
                   >
-                    {/* Thumbnail */}
-                    <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-stone-100">
-                      {(variant.image || resolvedProductImage) ? (
-                        <img
-                          src={variant.image || resolvedProductImage}
-                          alt={toVariantLabel(variant)}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-
-                    {/* Info */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-stone-900">
-                          {toVariantLabel(variant)}
-                        </p>
-                        {isCurrent && (
-                          <span className="flex-shrink-0 rounded-full bg-[#3D1F0E] px-2 py-0.5 text-[10px] font-semibold text-white">
-                            Current
-                          </span>
-                        )}
+                    <div className="flex items-start gap-3">
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-stone-100 sm:h-16 sm:w-16">
+                        {(variant.image || resolvedProductImage) ? (
+                          <img
+                            src={variant.image || resolvedProductImage}
+                            alt={toVariantLabel(variant)}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
                       </div>
-                      <p className="mt-0.5 text-xs text-stone-500">
-                        {variant.stock > 0 ? `${variant.stock} available` : 'Out of stock'}
-                      </p>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="break-words text-sm font-semibold text-stone-900">
+                            {toVariantLabel(variant)}
+                          </p>
+                          {isCurrent && (
+                            <span className="flex-shrink-0 rounded-full bg-[#3D1F0E] px-2 py-0.5 text-[10px] font-semibold text-white">
+                              Current
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs text-stone-500">
+                          {variant.stock > 0 ? `${variant.stock} available` : 'Out of stock'}
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-stone-900">
+                          à§³{variant.price.toLocaleString('bn-BD')}
+                        </p>
+                      </div>
                     </div>
 
-                    {/* Price */}
-                    <p className="flex-shrink-0 text-sm font-semibold text-stone-900">
-                      ৳{variant.price.toLocaleString('bn-BD')}
-                    </p>
-
-                    {/* Action button */}
-                    <button
-                      type="button"
-                      disabled={disableAction || submitting}
-                      onClick={() => void handleAdjust(variant, delta)}
-                      className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border transition ${
-                        disableAction
-                          ? 'cursor-not-allowed border-stone-200 bg-stone-100 text-stone-400'
-                          : delta === -1
-                            ? 'border-[#3D1F0E] bg-white text-[#3D1F0E] hover:bg-[#F5E9DC]'
-                            : 'border-[#3D1F0E] bg-[#3D1F0E] text-white hover:bg-[#2A1509]'
-                      }`}
-                      aria-label={delta === -1 ? `Decrease ${variant.name}` : `Add ${variant.name}`}
-                    >
-                      {submitting ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : delta === -1 ? (
-                        <Minus size={14} />
-                      ) : (
-                        <Plus size={14} />
-                      )}
-                    </button>
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        disabled={disableAction || submitting}
+                        onClick={() => void handleAdjust(variant, delta)}
+                        className={`flex h-10 min-w-10 items-center justify-center rounded-full border px-3 transition sm:w-10 sm:px-0 ${
+                          disableAction
+                            ? 'cursor-not-allowed border-stone-200 bg-stone-100 text-stone-400'
+                            : delta === -1
+                              ? 'border-[#3D1F0E] bg-white text-[#3D1F0E] hover:bg-[#F5E9DC]'
+                              : 'border-[#3D1F0E] bg-[#3D1F0E] text-white hover:bg-[#2A1509]'
+                        }`}
+                        aria-label={delta === -1 ? `Decrease ${variant.name}` : `Add ${variant.name}`}
+                      >
+                        {submitting ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : delta === -1 ? (
+                          <Minus size={14} />
+                        ) : (
+                          <Plus size={14} />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -470,9 +481,8 @@ export default function VariantModal({
           )}
         </div>
 
-        {/* ── Footer ──────────────────────────────────────────────────── */}
         {mode === 'select' && (
-          <div className="border-t border-stone-200 px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:px-5 sm:pb-4">
+          <div className="sticky bottom-0 shrink-0 border-t border-stone-200 bg-white px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-[0_-10px_24px_rgba(28,25,23,0.08)] sm:px-5 sm:pb-4">
             <button
               type="button"
               onClick={() => void handleConfirm()}
@@ -495,4 +505,6 @@ export default function VariantModal({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalNode, document.body) : modalNode;
 }
