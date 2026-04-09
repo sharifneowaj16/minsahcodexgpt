@@ -80,7 +80,10 @@ export default function CartStepper({
     setHasResolvedProductContext(Boolean(variants?.length));
   }, [maxStock, productId, productImage, variants]);
 
-  const effectiveVariants = resolvedVariants.length > 0 ? resolvedVariants : variants ?? [];
+  const effectiveVariants = useMemo(
+    () => (resolvedVariants.length > 0 ? resolvedVariants : variants ?? []),
+    [resolvedVariants, variants]
+  );
   const effectiveProductImage = resolvedProductImage || variantImage || productImage;
 
   const isVariantProduct =

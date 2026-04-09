@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -241,6 +241,19 @@ export default function ProductClient({
   const totalPrice = currentPrice * quantity;
   const galleryImages = (product.images as Array<string | { url: string; alt?: string }>).map((img) =>
     typeof img === 'string' ? { url: img, alt: product.name } : img
+  );
+  const stickyBarVariants = useMemo(
+    () =>
+      product.variants.map((variant) => ({
+        id: variant.id,
+        name: variant.name,
+        price: variant.price,
+        stock: variant.stock,
+        image: variant.image ?? null,
+        weight: variant.weight ?? product.weight ?? null,
+        attributes: (variant.attributes ?? {}) as Record<string, string>,
+      })),
+    [product.variants, product.weight]
   );
 
   const handleVariantChange = useCallback((variantId: string | null, price: number, qty: number) => {
@@ -801,15 +814,7 @@ export default function ProductClient({
         size={variantSize}
         color={variantColor}
         variantImage={variantImage}
-        variants={product.variants.map((variant) => ({
-          id: variant.id,
-          name: variant.name,
-          price: variant.price,
-          stock: variant.stock,
-          image: variant.image ?? null,
-          weight: variant.weight ?? product.weight ?? null,
-          attributes: (variant.attributes ?? {}) as Record<string, string>,
-        }))}
+        variants={stickyBarVariants}
         quantity={quantity}
         maxStock={activeStock}
         inStock={activeInStock}
