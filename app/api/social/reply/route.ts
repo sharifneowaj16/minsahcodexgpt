@@ -278,7 +278,10 @@ async function sendYouTubeReply(commentId: string | undefined, text: string) {
   return await parseGraphResponse(response, 'Failed to send YouTube reply');
 }
 
-async function parseGraphResponse(response: Response, fallbackMessage: string) {
+async function parseGraphResponse(
+  response: Response,
+  fallbackMessage: string
+): Promise<{ error?: { message?: string }; message_id?: string; id?: string }> {
   const data = (await response.json().catch(() => null)) as
     | { error?: { message?: string }; message_id?: string; id?: string }
     | null;
@@ -287,7 +290,7 @@ async function parseGraphResponse(response: Response, fallbackMessage: string) {
     throw new Error(data?.error?.message || fallbackMessage);
   }
 
-  return data;
+  return data ?? {};
 }
 
 async function persistOutgoingReply({
