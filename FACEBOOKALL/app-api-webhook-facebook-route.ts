@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getFacebookProfile } from '@/lib/facebook/profile';
 import { normalizeFacebookAttachments } from '@/lib/facebook/inboxSync';
 import { persistSocialMessage } from '@/lib/social/socialMessageIngest';
 
@@ -30,9 +29,6 @@ interface FacebookMessagingEvent {
     }>;
   };
   sender?: {
-    id?: string;
-  };
-  recipient?: {
     id?: string;
   };
   timestamp?: number;
@@ -70,25 +66,21 @@ interface YouTubeCommentPayload {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const headerPlatform = request.headers.get('x-platform') || 'unknown';
-    const platform =
-      body.object === 'page'
-        ? 'facebook'
-        : body.object === 'instagram'
-          ? 'instagram'
-          : headerPlatform;
+    const platform = request.headers.get('x-platform') || 'unknown';
 
     if (platform === 'facebook' || platform === 'instagram') {
-      for (const entry of body.entry || []) {
-        if (entry.messaging) {
-          for (const event of entry.messaging) {
-            await processMessage(platform, event);
+      if (body.object === 'page' || body.object === 'instagram') {
+        for (const entry of body.entry || []) {
+          if (entry.messaging) {
+            for (const event of entry.messaging) {
+              await processMessage(platform, event);
+            }
           }
-        }
-        if (entry.changes) {
-          for (const change of entry.changes) {
-            if (change.field === 'comments') {
-              await processComment(platform, change.value);
+          if (entry.changes) {
+            for (const change of entry.changes) {
+              if (change.field === 'comments') {
+                await processComment(platform, change.value);
+              }
             }
           }
         }
@@ -136,64 +128,30 @@ export async function GET(request: NextRequest) {
 
 async function processMessage(platform: string, event: FacebookMessagingEvent) {
   if (!event.sender?.id || (!event.message?.text && !event.message?.attachments?.length)) return;
-
   const attachments = normalizeFacebookAttachments(event.message?.attachments);
   const content =
     event.message?.text ||
     `[${attachments.map((attachment) => attachment.type).join(', ') || 'attachment'}]`;
-  const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
-  const pageId = process.env.FACEBOOK_PAGE_ID;
-  const isFacebook = platform === 'facebook';
-  const isIncoming = isFacebook && pageId ? event.sender.id !== pageId : true;
-  const conversationPeerId =
-    isFacebook && pageId && event.sender.id === pageId
-      ? event.recipient?.id ?? event.sender.id
-      : event.sender.id;
-  const senderProfile =
-    isFacebook && accessToken
-      ? await getFacebookProfile(
-          isIncoming ? event.sender.id : pageId,
-          accessToken,
-          { id: isIncoming ? event.sender.id : pageId ?? 'facebook-page' }
-        )
-      : {
-          id: event.sender.id,
-          name: event.sender.id,
-          avatar: null,
-        };
 
   await persistSocialMessage({
     platform,
     type: 'message',
     externalId: event.message?.mid ?? null,
-    conversationId: `${platform}:${conversationPeerId}`,
-    senderId: isIncoming ? event.sender.id : pageId ?? event.sender.id,
-    senderName: senderProfile.name ?? event.sender.id,
-    senderAvatar: senderProfile.avatar,
+    conversationId: `${platform}:${event.sender.id}`,
+    senderId: event.sender.id,
+    senderName: event.sender.id,
     content,
     rawPayload: event,
-    isIncoming,
-    isRead: !isIncoming,
+    isIncoming: true,
+    isRead: false,
     timestamp: new Date(event.timestamp ?? Date.now()),
     attachments,
-    attachmentAccessToken: accessToken,
+    attachmentAccessToken: process.env.FACEBOOK_ACCESS_TOKEN,
   });
 }
 
 async function processComment(platform: string, comment: SocialCommentPayload) {
   if (!comment.message) return;
-  const senderProfile =
-    platform === 'facebook' && process.env.FACEBOOK_ACCESS_TOKEN
-      ? await getFacebookProfile(comment.from?.id, process.env.FACEBOOK_ACCESS_TOKEN, {
-          id: comment.from?.id ?? undefined,
-          name: comment.from?.name ?? null,
-        })
-      : {
-          id: comment.from?.id ?? 'unknown',
-          name: comment.from?.name ?? null,
-          avatar: null,
-        };
-
   await persistSocialMessage({
     platform,
     type: 'comment',
@@ -203,8 +161,7 @@ async function processComment(platform: string, comment: SocialCommentPayload) {
       : `${platform}:comment:${comment.id}`,
     postId: comment.post_id,
     senderId: comment.from?.id,
-    senderName: senderProfile.name ?? comment.from?.name ?? null,
-    senderAvatar: senderProfile.avatar,
+    senderName: comment.from?.name,
     content: comment.message,
     rawPayload: comment,
     isIncoming: true,

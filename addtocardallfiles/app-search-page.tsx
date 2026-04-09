@@ -9,8 +9,6 @@ import {
   Star, Package, ChevronDown, ChevronUp, Filter, Volume2, VolumeX,
   Home, ChevronRight, AlertCircle, Flame, Tag, Zap, CheckCircle
 } from 'lucide-react';
-import CartStepper from '@/components/cart/CartStepper';
-import CardBuyNowButton from '@/components/cart/CardBuyNowButton';
 import { formatPrice } from '@/utils/currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -111,36 +109,36 @@ function ProductCard({ product, query }: { product: Product; query: string }) {
     <Link
       href={`/products/${product.slug}`}
       onClick={handleClick}
-      className="group flex h-full flex-col overflow-hidden rounded-[22px] border border-stone-200/80 bg-white shadow-[0_6px_20px_rgba(66,28,0,0.06)] transition-all duration-200 hover:border-minsah-primary/30 hover:shadow-[0_12px_28px_rgba(66,28,0,0.10)]"
+      className="group bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-minsah-primary/30 hover:shadow-lg transition-all duration-200 flex flex-col"
     >
       {/* Image */}
-      <div className="relative aspect-square overflow-hidden bg-gradient-to-br from-[#FFF6EE] via-[#FFFDFC] to-[#FBE7D5]">
+      <div className="relative aspect-square bg-gray-50 overflow-hidden">
         {img ? (
           <img
             src={img}
             alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Package size={36} className="text-stone-300" />
+          <div className="w-full h-full flex items-center justify-center">
+            <Package size={40} className="text-gray-200" />
           </div>
         )}
 
         {/* Badges — top left */}
-        <div className="absolute left-2 top-2 flex max-w-[60%] flex-col gap-1">
+        <div className="absolute top-2 left-2 flex flex-col gap-1">
           {discount >= 10 && (
-            <span className="rounded-md bg-red-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+            <span className="px-2 py-0.5 bg-red-500 text-white text-[11px] font-bold rounded-md shadow-sm">
               -{discount}%
             </span>
           )}
           {product.isFlashSale && (
-            <span className="flex items-center gap-1 rounded-md bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+            <span className="px-2 py-0.5 bg-orange-500 text-white text-[11px] font-bold rounded-md flex items-center gap-1 shadow-sm">
               <Zap size={10} />Flash
             </span>
           )}
           {product.isNewArrival && !product.isFlashSale && (
-            <span className="rounded-md bg-green-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+            <span className="px-2 py-0.5 bg-green-500 text-white text-[11px] font-bold rounded-md shadow-sm">
               New
             </span>
           )}
@@ -154,55 +152,35 @@ function ProductCard({ product, query }: { product: Product; query: string }) {
             </span>
           </div>
         )}
-
-        {product.inStock !== false && (
-          <div
-            className="absolute bottom-2.5 right-2.5 z-10"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-          >
-            <CartStepper
-              productId={product.id}
-              productName={product.name}
-              productImage={img}
-              price={price}
-              maxStock={99}
-              className="h-10 w-10"
-              circleAdd={true}
-            />
-          </div>
-        )}
       </div>
 
       {/* Info */}
-      <div className="flex flex-1 flex-col p-2.5 sm:p-3">
+      <div className="p-3 flex flex-col flex-1">
         {/* Brand */}
         {product.brand && (
-          <p className="mb-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-minsah-secondary/90">
+          <p className="text-[11px] text-minsah-secondary font-medium uppercase tracking-wider mb-1 truncate">
             {product.brand}
           </p>
         )}
 
         {/* Name */}
-        <p className="mb-2 min-h-[2.5rem] text-[13px] font-semibold leading-5 text-minsah-dark line-clamp-2 sm:text-sm">
+        <p className="text-sm font-semibold text-minsah-dark line-clamp-2 mb-2 flex-1">
           <HighlightedText html={product.highlighted?.name} fallback={product.name} />
         </p>
 
         {/* Rating */}
         {product.rating && product.rating > 0 && (
-          <div className="mb-2 flex items-center gap-1.5">
-            <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1 mb-2">
+            <div className="flex items-center">
               {[1,2,3,4,5].map(i => (
                 <Star
                   key={i}
-                  size={10}
+                  size={11}
                   className={i <= Math.round(product.rating!) ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}
                 />
               ))}
             </div>
-            <span className="truncate text-[10px] text-gray-400">
+            <span className="text-[11px] text-gray-400">
               {product.rating.toFixed(1)}
               {product.reviewCount ? ` (${product.reviewCount})` : ''}
             </span>
@@ -210,12 +188,12 @@ function ProductCard({ product, query }: { product: Product; query: string }) {
         )}
 
         {/* Price row */}
-        <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
-          <span className="text-[15px] font-bold leading-none text-minsah-primary sm:text-base">
+        <div className="flex items-end gap-2">
+          <span className="text-base font-bold text-minsah-primary">
             {formatPrice(price)}
           </span>
           {comparePrice && comparePrice > price && (
-            <span className="pb-0.5 text-[11px] text-gray-400 line-through">
+            <span className="text-xs text-gray-400 line-through pb-0.5">
               {formatPrice(comparePrice)}
             </span>
           )}
@@ -223,27 +201,10 @@ function ProductCard({ product, query }: { product: Product; query: string }) {
 
         {/* In stock indicator */}
         {product.inStock !== false && (
-          <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-green-600">
+          <p className="text-[11px] text-green-600 flex items-center gap-1 mt-1.5">
             <CheckCircle size={10} />In Stock
           </p>
         )}
-
-        <div
-          className="mt-3 pt-0.5"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          <CardBuyNowButton
-            productId={product.id}
-            productName={product.name}
-            productImage={img}
-            price={price}
-            disabled={product.inStock === false}
-            className="rounded-xl py-2.5 text-[13px] font-bold shadow-[0_8px_20px_rgba(61,31,14,0.12)]"
-          />
-        </div>
       </div>
     </Link>
   );

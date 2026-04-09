@@ -123,9 +123,17 @@ export default function CartStepper({
 
   const currentCartItemId = currentVariantId || productId;
   const currentCartItem = items.find((item) => item.id === currentCartItemId);
-  const qty = currentCartItem?.quantity ?? 0;
+  const currentItemQty = currentCartItem?.quantity ?? 0;
+  const productQty = productCartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const qty = variantId ? currentItemQty : isVariantProduct ? productQty : currentItemQty;
   const safeMaxStock = clampStock(currentVariant?.stock ?? resolvedMaxStock ?? maxStock);
   const isOutOfStock = safeMaxStock <= 0;
+
+  useEffect(() => {
+    if (qty > 0 && zeroStateMode !== 'button') {
+      setZeroStateMode('button');
+    }
+  }, [qty, zeroStateMode]);
 
   const runMutation = async (action: () => Promise<void>) => {
     setIsBusy(true);

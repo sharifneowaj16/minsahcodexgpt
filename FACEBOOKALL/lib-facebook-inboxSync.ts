@@ -1,5 +1,4 @@
 import { persistSocialMessage, type SocialAttachmentInput } from '@/lib/social/socialMessageIngest';
-import { getFacebookProfile } from '@/lib/facebook/profile';
 
 const FACEBOOK_GRAPH_API_VERSION = process.env.FACEBOOK_GRAPH_API_VERSION || 'v21.0';
 
@@ -56,16 +55,6 @@ interface FacebookAttachment {
     url?: string;
   };
   type?: string;
-}
-
-export interface FacebookInboxSyncProgress {
-  stage: 'fetching' | 'processing_conversation' | 'processing_message' | 'completed';
-  processedConversations: number;
-  totalConversations: number;
-  processedMessages: number;
-  processedAttachments: number;
-  conversationId?: string;
-  senderName?: string | null;
 }
 
 function buildFacebookGraphUrl(path: string, token: string, params: Record<string, string>) {
@@ -135,21 +124,18 @@ export async function syncRecentFacebookInbox({
   pageId,
   conversationLimit = 25,
   messageLimitPerConversation = 50,
-  onProgress,
 }: {
   accessToken: string;
   pageId: string;
   conversationLimit?: number;
   messageLimitPerConversation?: number;
-  onProgress?: (progress: FacebookInboxSyncProgress) => void | Promise<void>;
 }) {
   const conversations: FacebookConversation[] = [];
   let afterCursor: string | null = null;
-  const pageProfile = await getFacebookProfile(pageId, accessToken);
 
   while (conversations.length < conversationLimit) {
     const params: Record<string, string> = {
-      fields: `id,updated_time,senders.limit(10){id,name},messages.limit(${messageLimitPerConversation}){id,message,created_time,from,attachments{id,type,mime_type,name,file_url,image_data,video_data,audio_data,payload}}`,
+      fields: `id,updated_time,senders.limit(10){id,name},messages.limit(${messageLimitPerConversation}){id,message,created_time,from,attachments{mime_type,name,file_url,image_data,video_data,audio_data}}`,
       platform: 'messenger',
       limit: String(Math.min(50, conversationLimit - conversations.length)),
     };
@@ -166,13 +152,6 @@ export async function syncRecentFacebookInbox({
     const pageData = page.data ?? [];
     conversations.push(...pageData);
     afterCursor = page.paging?.cursors?.after ?? null;
-    await onProgress?.({
-      stage: 'fetching',
-      processedConversations: 0,
-      totalConversations: conversations.length,
-      processedMessages: 0,
-      processedAttachments: 0,
-    });
 
     if (!afterCursor || pageData.length === 0) {
       break;
@@ -181,89 +160,35 @@ export async function syncRecentFacebookInbox({
 
   let processedMessages = 0;
   let processedAttachments = 0;
-  let processedConversations = 0;
 
   for (const conversation of conversations) {
-    const participants = conversation.senders?.data ?? [];
-    const customerParticipant =
-      participants.find((participant) => participant.id && participant.id !== pageId) ??
-      participants[0] ??
-      null;
-    const customerProfile = await getFacebookProfile(customerParticipant?.id, accessToken, {
-      id: customerParticipant?.id ?? undefined,
-      name: customerParticipant?.name ?? null,
-    });
-    const conversationId = customerParticipant?.id
-      ? `facebook:${customerParticipant.id}`
-      : `facebook:${conversation.id}`;
+    const conversationId = `facebook:${conversation.id}`;
     const messages = conversation.messages?.data ?? [];
-    await onProgress?.({
-      stage: 'processing_conversation',
-      processedConversations,
-      totalConversations: conversations.length,
-      processedMessages,
-      processedAttachments,
-      conversationId,
-      senderName: customerProfile.name,
-    });
 
     for (const message of messages) {
       const attachments = normalizeFacebookAttachments(message.attachments?.data);
-      const fromId = message.from?.id ?? customerParticipant?.id ?? null;
-      const isIncoming = fromId !== pageId;
-      const senderProfile =
-        !fromId || !isIncoming
-          ? pageProfile
-          : fromId === customerProfile.id
-            ? customerProfile
-            : await getFacebookProfile(fromId, accessToken, {
-                id: fromId,
-                name: message.from?.name ?? null,
-              });
-
       await persistSocialMessage({
         platform: 'facebook',
         type: 'message',
         externalId: message.id ?? null,
         conversationId,
-        senderId: fromId,
-        senderName: senderProfile.name ?? message.from?.name ?? customerParticipant?.name ?? null,
-        senderAvatar: senderProfile.avatar,
+        senderId: message.from?.id ?? null,
+        senderName: message.from?.name ?? null,
         content: buildMessageText(message),
         rawPayload: {
           conversation,
           message,
-          customerProfile,
         },
-        isIncoming,
-        isRead: !isIncoming,
+        isIncoming: true,
+        isRead: false,
         timestamp: message.created_time ? new Date(message.created_time) : new Date(),
         attachments,
         attachmentAccessToken: accessToken,
       });
       processedMessages += 1;
       processedAttachments += attachments.length;
-      await onProgress?.({
-        stage: 'processing_message',
-        processedConversations,
-        totalConversations: conversations.length,
-        processedMessages,
-        processedAttachments,
-        conversationId,
-        senderName: senderProfile.name,
-      });
     }
-
-    processedConversations += 1;
   }
-
-  await onProgress?.({
-    stage: 'completed',
-    processedConversations,
-    totalConversations: conversations.length,
-    processedMessages,
-    processedAttachments,
-  });
 
   return {
     processedConversations: conversations.length,

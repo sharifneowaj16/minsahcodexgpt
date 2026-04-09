@@ -9,13 +9,14 @@ export async function GET(request: NextRequest) {
     const unreadOnly = searchParams.get('unread') === 'true';
     const baseWhere = {
       ...(platform && { platform }),
-      ...(unreadOnly ? { isRead: false, isIncoming: true } : {}),
+      ...(unreadOnly && { isRead: false }),
+      isIncoming: true,
     };
 
     const messages = await prisma.socialMessage.findMany({
       where: baseWhere,
       orderBy: { timestamp: 'desc' },
-      take: 200,
+      take: 50,
       include: {
         attachments: {
           orderBy: { createdAt: 'asc' },
