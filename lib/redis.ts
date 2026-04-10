@@ -8,13 +8,17 @@
  *
  * Reads: process.env.REDIS_URL
  */
-
 import Redis from 'ioredis';
 
-function buildRedisOptions(): { lazyConnect: boolean } & ConstructorParameters<typeof Redis>[1] {
+function buildRedisOptions(): {
+  lazyConnect: boolean;
+  maxRetriesPerRequest: null;
+  enableReadyCheck: boolean;
+  retryStrategy: (times: number) => number;
+} {
   return {
     lazyConnect: false,
-    maxRetriesPerRequest: null,   // required for BullMQ compat; harmless here
+    maxRetriesPerRequest: null,
     enableReadyCheck: true,
     retryStrategy: (times: number) => Math.min(times * 200, 5000),
   };
@@ -25,8 +29,6 @@ function getRedisUrl(): string {
   if (!url) throw new Error('[redis] REDIS_URL environment variable is not set');
   return url;
 }
-
-// ── singleton publisher ────────────────────────────────────────────────────────
 
 let _publisher: Redis | null = null;
 
@@ -48,14 +50,6 @@ export const redis: Redis = new Proxy({} as Redis, {
   },
 });
 
-// ── subscriber factory ─────────────────────────────────────────────────────────
-
-/**
- * Creates a fresh dedicated Redis subscriber client.
- * Each SSE connection must call this and disconnect() when done.
- * NEVER share a subscriber across requests — ioredis subscribers
- * cannot send regular commands while subscribed.
- */
 export function createRedisSubscriber(): Redis {
   const sub = new Redis(getRedisUrl(), {
     ...buildRedisOptions(),
@@ -68,11 +62,7 @@ export function createRedisSubscriber(): Redis {
   return sub;
 }
 
-// ── channel constant ───────────────────────────────────────────────────────────
-
 export const SOCIAL_UPDATES_CHANNEL = 'social-updates' as const;
-
-// ── payload type ───────────────────────────────────────────────────────────────
 
 export interface SocialUpdatePayload {
   type: 'social-update';
