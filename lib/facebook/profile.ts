@@ -19,6 +19,15 @@ interface FacebookProfileResponse {
 
 const profileCache = new Map<string, Promise<FacebookProfile>>();
 
+function buildFacebookAvatarUrl(id: string, accessToken: string) {
+  const url = new URL(`https://graph.facebook.com/${FACEBOOK_GRAPH_API_VERSION}/${id}/picture`);
+  url.searchParams.set('width', '128');
+  url.searchParams.set('height', '128');
+  url.searchParams.set('redirect', 'false');
+  url.searchParams.set('access_token', accessToken);
+  return url.toString();
+}
+
 export async function getFacebookProfile(
   id: string | null | undefined,
   accessToken: string | null | undefined,
@@ -28,7 +37,7 @@ export async function getFacebookProfile(
   const fallbackProfile: FacebookProfile = {
     id: safeId,
     name: fallback?.name ?? null,
-    avatar: fallback?.avatar ?? null,
+    avatar: id && accessToken ? fallback?.avatar ?? buildFacebookAvatarUrl(id, accessToken) : fallback?.avatar ?? null,
   };
 
   if (!id || !accessToken) {

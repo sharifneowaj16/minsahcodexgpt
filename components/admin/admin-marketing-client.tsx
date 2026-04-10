@@ -86,7 +86,13 @@ export function AdminMarketingClient({ initialTab }: AdminMarketingClientProps) 
       </div>
 
       {/* Content */}
-      <div className="h-[calc(100vh-180px)]">
+      <div
+        className={
+          activeTab === 'inbox'
+            ? 'h-[calc(100vh-132px)] overflow-hidden md:h-[calc(100vh-180px)]'
+            : 'h-[calc(100vh-180px)]'
+        }
+      >
         {activeTab === 'overview' && (
           <div className="p-6">
             <MarketingHub />
