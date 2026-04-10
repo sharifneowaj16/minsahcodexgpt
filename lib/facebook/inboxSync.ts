@@ -4,9 +4,8 @@ import { getFacebookProfile } from '@/lib/facebook/profile';
 const FACEBOOK_GRAPH_API_VERSION = process.env.FACEBOOK_GRAPH_API_VERSION || 'v21.0';
 
 interface GraphPaging {
-  cursors?: {
-    after?: string;
-  };
+  cursors?: { after?: string; before?: string };
+  next?: string;
 }
 
 interface GraphResponse<T> {
@@ -17,9 +16,7 @@ interface GraphResponse<T> {
 interface FacebookConversation {
   id: string;
   updated_time?: string;
-  senders?: {
-    data?: Array<{ id?: string; name?: string }>;
-  };
+  senders?: { data?: Array<{ id?: string; name?: string }> };
   messages?: GraphResponse<FacebookConversationMessage>;
 }
 
@@ -27,13 +24,8 @@ interface FacebookConversationMessage {
   id?: string;
   message?: string;
   created_time?: string;
-  from?: {
-    id?: string;
-    name?: string;
-  };
-  attachments?: {
-    data?: FacebookAttachment[];
-  };
+  from?: { id?: string; name?: string };
+  attachments?: { data?: FacebookAttachment[] };
 }
 
 interface FacebookAttachment {
@@ -41,20 +33,10 @@ interface FacebookAttachment {
   mime_type?: string;
   name?: string;
   file_url?: string;
-  image_data?: {
-    url?: string;
-    preview_url?: string;
-  };
-  video_data?: {
-    url?: string;
-    preview_url?: string;
-  };
-  audio_data?: {
-    url?: string;
-  };
-  payload?: {
-    url?: string;
-  };
+  image_data?: { url?: string; preview_url?: string };
+  video_data?: { url?: string; preview_url?: string };
+  audio_data?: { url?: string };
+  payload?: { url?: string };
   type?: string;
 }
 
@@ -66,6 +48,7 @@ export interface FacebookInboxSyncProgress {
   processedAttachments: number;
   conversationId?: string;
   senderName?: string | null;
+  currentPage?: number;
 }
 
 function buildFacebookGraphUrl(path: string, token: string, params: Record<string, string>) {
@@ -78,16 +61,37 @@ function buildFacebookGraphUrl(path: string, token: string, params: Record<strin
 }
 
 async function fetchFacebookGraph<T>(path: string, token: string, params: Record<string, string>) {
-  const response = await fetch(buildFacebookGraphUrl(path, token, params), {
-    cache: 'no-store',
-  });
-
+  const response = await fetch(buildFacebookGraphUrl(path, token, params), { cache: 'no-store' });
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`Facebook Graph API error ${response.status}: ${body}`);
   }
-
   return (await response.json()) as T;
+}
+
+// Fetch ALL pages of a paginated endpoint
+async function fetchAllPages<T>(
+  path: string,
+  token: string,
+  baseParams: Record<string, string>,
+  limit = 100
+): Promise<T[]> {
+  const all: T[] = [];
+  let afterCursor: string | null = null;
+
+  while (true) {
+    const params: Record<string, string> = { ...baseParams, limit: String(limit) };
+    if (afterCursor) params.after = afterCursor;
+
+    const page = await fetchFacebookGraph<GraphResponse<T>>(path, token, params);
+    const pageData = page.data ?? [];
+    all.push(...pageData);
+
+    afterCursor = page.paging?.cursors?.after ?? null;
+    if (!afterCursor || pageData.length === 0) break;
+  }
+
+  return all;
 }
 
 export function normalizeFacebookAttachments(attachments: FacebookAttachment[] | undefined): SocialAttachmentInput[] {
@@ -124,8 +128,7 @@ export function normalizeFacebookAttachments(attachments: FacebookAttachment[] |
 
 function buildMessageText(message: FacebookConversationMessage) {
   if (message.message?.trim()) return message.message.trim();
-
-  const attachmentTypes = normalizeFacebookAttachments(message.attachments?.data).map((attachment) => attachment.type);
+  const attachmentTypes = normalizeFacebookAttachments(message.attachments?.data).map((a) => a.type);
   if (attachmentTypes.length === 0) return '[Facebook message]';
   return `[${attachmentTypes.join(', ')} attachment${attachmentTypes.length > 1 ? 's' : ''}]`;
 }
@@ -133,8 +136,9 @@ function buildMessageText(message: FacebookConversationMessage) {
 export async function syncRecentFacebookInbox({
   accessToken,
   pageId,
-  conversationLimit = 25,
-  messageLimitPerConversation = 50,
+  // conversationLimit = 0 means UNLIMITED
+  conversationLimit = 0,
+  messageLimitPerConversation = 100,
   onProgress,
 }: {
   accessToken: string;
@@ -143,21 +147,30 @@ export async function syncRecentFacebookInbox({
   messageLimitPerConversation?: number;
   onProgress?: (progress: FacebookInboxSyncProgress) => void | Promise<void>;
 }) {
-  const conversations: FacebookConversation[] = [];
-  let afterCursor: string | null = null;
   const pageProfile = await getFacebookProfile(pageId, accessToken);
 
-  while (conversations.length < conversationLimit) {
+  await onProgress?.({
+    stage: 'fetching',
+    processedConversations: 0,
+    totalConversations: 0,
+    processedMessages: 0,
+    processedAttachments: 0,
+  });
+
+  // Fetch ALL conversations (no limit unless specified)
+  const conversations: FacebookConversation[] = [];
+  let afterCursor: string | null = null;
+  const batchSize = 50;
+
+  while (true) {
     const params: Record<string, string> = {
       fields: `id,updated_time,senders.limit(10){id,name},messages.limit(${messageLimitPerConversation}){id,message,created_time,from,attachments{id,type,mime_type,name,file_url,image_data,video_data,audio_data,payload}}`,
       platform: 'messenger',
-      limit: String(Math.min(50, conversationLimit - conversations.length)),
+      limit: String(batchSize),
     };
-    if (afterCursor) {
-      params.after = afterCursor;
-    }
+    if (afterCursor) params.after = afterCursor;
 
-    const page: GraphResponse<FacebookConversation> = await fetchFacebookGraph(
+    const page = await fetchFacebookGraph<GraphResponse<FacebookConversation>>(
       `${pageId}/conversations`,
       accessToken,
       params
@@ -166,6 +179,7 @@ export async function syncRecentFacebookInbox({
     const pageData = page.data ?? [];
     conversations.push(...pageData);
     afterCursor = page.paging?.cursors?.after ?? null;
+
     await onProgress?.({
       stage: 'fetching',
       processedConversations: 0,
@@ -174,9 +188,9 @@ export async function syncRecentFacebookInbox({
       processedAttachments: 0,
     });
 
-    if (!afterCursor || pageData.length === 0) {
-      break;
-    }
+    // Stop if we've hit the limit (0 = unlimited)
+    if (conversationLimit > 0 && conversations.length >= conversationLimit) break;
+    if (!afterCursor || pageData.length === 0) break;
   }
 
   let processedMessages = 0;
@@ -186,9 +200,7 @@ export async function syncRecentFacebookInbox({
   for (const conversation of conversations) {
     const participants = conversation.senders?.data ?? [];
     const customerParticipant =
-      participants.find((participant) => participant.id && participant.id !== pageId) ??
-      participants[0] ??
-      null;
+      participants.find((p) => p.id && p.id !== pageId) ?? participants[0] ?? null;
     const customerProfile = await getFacebookProfile(customerParticipant?.id, accessToken, {
       id: customerParticipant?.id ?? undefined,
       name: customerParticipant?.name ?? null,
@@ -197,6 +209,7 @@ export async function syncRecentFacebookInbox({
       ? `facebook:${customerParticipant.id}`
       : `facebook:${conversation.id}`;
     const messages = conversation.messages?.data ?? [];
+
     await onProgress?.({
       stage: 'processing_conversation',
       processedConversations,
@@ -215,11 +228,8 @@ export async function syncRecentFacebookInbox({
         !fromId || !isIncoming
           ? pageProfile
           : fromId === customerProfile.id
-            ? customerProfile
-            : await getFacebookProfile(fromId, accessToken, {
-                id: fromId,
-                name: message.from?.name ?? null,
-              });
+          ? customerProfile
+          : await getFacebookProfile(fromId, accessToken, { id: fromId, name: message.from?.name ?? null });
 
       await persistSocialMessage({
         platform: 'facebook',
@@ -230,11 +240,7 @@ export async function syncRecentFacebookInbox({
         senderName: senderProfile.name ?? message.from?.name ?? customerParticipant?.name ?? null,
         senderAvatar: senderProfile.avatar,
         content: buildMessageText(message),
-        rawPayload: {
-          conversation,
-          message,
-          customerProfile,
-        },
+        rawPayload: { conversation, message, customerProfile },
         isIncoming,
         isRead: !isIncoming,
         timestamp: message.created_time ? new Date(message.created_time) : new Date(),
@@ -243,6 +249,7 @@ export async function syncRecentFacebookInbox({
       });
       processedMessages += 1;
       processedAttachments += attachments.length;
+
       await onProgress?.({
         stage: 'processing_message',
         processedConversations,
@@ -265,9 +272,5 @@ export async function syncRecentFacebookInbox({
     processedAttachments,
   });
 
-  return {
-    processedConversations: conversations.length,
-    processedMessages,
-    processedAttachments,
-  };
+  return { processedConversations: conversations.length, processedMessages, processedAttachments };
 }
