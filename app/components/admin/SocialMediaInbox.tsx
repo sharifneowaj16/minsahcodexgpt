@@ -683,7 +683,7 @@ export default function SocialMediaInbox({
           </div>
         </div>
       )}
-      {!syncingFb && syncStatusLabel && (
+      {!syncingFacebook && syncStatusLabel && (
         <div className={`px-4 py-2 text-xs font-medium ${
           syncProgress.stage === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
         }`}>
