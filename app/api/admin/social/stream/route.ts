@@ -10,9 +10,7 @@ function sleep(ms: number) {
 
 export async function GET(request: NextRequest) {
   const admin = await getVerifiedAdmin(request);
-  if (!admin) {
-    return adminUnauthorizedResponse();
-  }
+  if (!admin) return adminUnauthorizedResponse();
 
   const platform = request.nextUrl.searchParams.get('platform');
   const encoder = new TextEncoder();
@@ -22,20 +20,19 @@ export async function GET(request: NextRequest) {
       let closed = false;
       let lastFingerprint = '';
       let lastHeartbeatAt = 0;
+      // Start fast (500ms), slow down if no changes, max 2s
+      let pollInterval = 500;
+      let noChangeStreak = 0;
 
       const close = () => {
         if (closed) return;
         closed = true;
-        try {
-          controller.close();
-        } catch {}
+        try { controller.close(); } catch {}
       };
 
       const send = (event: string, data: Record<string, unknown>) => {
         if (closed) return;
-        controller.enqueue(
-          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-        );
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
 
       request.signal.addEventListener('abort', close);
@@ -48,11 +45,7 @@ export async function GET(request: NextRequest) {
             prisma.socialMessage.findFirst({
               where,
               orderBy: { updatedAt: 'desc' },
-              select: {
-                id: true,
-                updatedAt: true,
-                conversationId: true,
-              },
+              select: { id: true, updatedAt: true, conversationId: true, platform: true },
             }),
             prisma.socialMessage.count({
               where: {
@@ -72,10 +65,25 @@ export async function GET(request: NextRequest) {
 
           if (fingerprint !== lastFingerprint) {
             lastFingerprint = fingerprint;
-            send('message', { type: 'social-update', fingerprint });
-          } else if (Date.now() - lastHeartbeatAt > 15000) {
-            lastHeartbeatAt = Date.now();
-            send('ping', { now: new Date().toISOString() });
+            noChangeStreak = 0;
+            // Speed back up when there's activity
+            pollInterval = 500;
+            send('message', {
+              type: 'social-update',
+              fingerprint,
+              unreadCount,
+              platform: latestMessage?.platform,
+            });
+          } else {
+            noChangeStreak++;
+            // Gradually slow down when idle: 500ms → 1s → 2s
+            if (noChangeStreak > 10) pollInterval = 2000;
+            else if (noChangeStreak > 5) pollInterval = 1000;
+
+            if (Date.now() - lastHeartbeatAt > 15000) {
+              lastHeartbeatAt = Date.now();
+              send('ping', { now: new Date().toISOString(), unreadCount });
+            }
           }
         } catch (error) {
           send('error', {
@@ -83,12 +91,10 @@ export async function GET(request: NextRequest) {
           });
         }
 
-        await sleep(1000);
+        await sleep(pollInterval);
       }
     },
-    cancel() {
-      return undefined;
-    },
+    cancel() { return undefined; },
   });
 
   return new Response(stream, {
