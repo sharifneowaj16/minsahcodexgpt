@@ -19,15 +19,11 @@ interface FacebookProfileResponse {
 
 const profileCache = new Map<string, Promise<FacebookProfile>>();
 
-/**
- * Use redirect=true so this URL works directly as <img src>.
- * redirect=false returns JSON ({"data":{"url":"..."}}) which breaks img tags.
- */
 function buildFacebookAvatarUrl(id: string, accessToken: string) {
   const url = new URL(`https://graph.facebook.com/${FACEBOOK_GRAPH_API_VERSION}/${id}/picture`);
   url.searchParams.set('width', '128');
   url.searchParams.set('height', '128');
-  url.searchParams.set('redirect', 'true'); // ← was 'false', caused JSON response in <img>
+  url.searchParams.set('redirect', 'false');
   url.searchParams.set('access_token', accessToken);
   return url.toString();
 }
@@ -74,7 +70,6 @@ export async function getFacebookProfile(
       return {
         id: data.id ?? safeId,
         name: data.name ?? fallbackProfile.name,
-        // profile_pic and picture.data.url are direct CDN URLs — safe for <img src>
         avatar: data.profile_pic ?? data.picture?.data?.url ?? fallbackProfile.avatar,
       };
     } catch {
