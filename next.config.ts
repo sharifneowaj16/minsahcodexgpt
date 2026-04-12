@@ -20,7 +20,11 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
 
-  env: { NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL },
+  env: {
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_REALTIME_WS_URL: process.env.NEXT_PUBLIC_REALTIME_WS_URL,
+    NEXT_PUBLIC_WS_AUTH_SECRET: process.env.NEXT_PUBLIC_WS_AUTH_SECRET,
+  },
 
   experimental: {
     serverActions: { bodySizeLimit: "10mb" },
