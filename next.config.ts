@@ -21,9 +21,9 @@ const nextConfig: NextConfig = {
   },
 
   env: {
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-    NEXT_PUBLIC_REALTIME_WS_URL: process.env.NEXT_PUBLIC_REALTIME_WS_URL,
-    NEXT_PUBLIC_WS_AUTH_SECRET: process.env.NEXT_PUBLIC_WS_AUTH_SECRET,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  NEXT_PUBLIC_REALTIME_WS_URL: "wss://realtime.minsahbeauty.cloud/ws",
+  NEXT_PUBLIC_WS_AUTH_SECRET: "438e261811e8de9de98d1d1d4b87d68d315fa1494166226f",
   },
 
   experimental: {
