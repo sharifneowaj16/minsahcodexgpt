@@ -1,17 +1,19 @@
 [phases.setup]
-# Node.js 22 LTS — Prisma requirement (^20.19 || ^22.12 || >=24.0)
 nixPkgs = ["nodejs_22", "npm-10_x"]
 
 [phases.install]
 cmds = [
   "npm ci",
-  # sharp এর Linux x64 prebuilt binary explicitly install করা হচ্ছে
-  # কারণ npm ci optional deps skip করে — sharp তখন silent fallback করে
   "npm install --cpu=x64 --os=linux --libc=glibc @img/sharp-linux-x64@0.33.5 @img/sharp-libvips-linux-x64@1.0.4",
 ]
 
 [phases.build]
 cmds = ["npm run build"]
+dependsOn = ["install"]
+
+[phases.build.env]
+NEXT_PUBLIC_REALTIME_WS_URL = "wss://realtime.minsahbeauty.cloud/ws"
+NEXT_PUBLIC_WS_AUTH_SECRET = "438e261811e8de9de98d1d1d4b87d68d315fa1494166226f"
 
 [start]
 cmd = "npm run start"
